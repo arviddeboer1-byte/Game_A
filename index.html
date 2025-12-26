@@ -57,7 +57,6 @@
 </div>
 
 <script>
-// Firebase config
 const firebaseConfig = {
   apiKey: "AIzaSyA8LmWdVyebJSYLmKOseg8UFxZege5buMg",
   authDomain: "paardensprong-game.firebaseapp.com",
@@ -94,22 +93,25 @@ const playerColors=['white','red','green','blue'];
 const createBtn=document.getElementById('createLobby');
 const joinBtn=document.getElementById('joinLobby');
 
+const startPositions = [{x:0,y:0},{x:9,y:0},{x:0,y:9},{x:9,y:9}];
+
 auth.onAuthStateChanged(user => {
   if(user){
     document.getElementById('currentUserInfo').innerText = `Ingelogd als: ${user.email}`;
     currentPlayerId=user.uid;
-    // Als we een lobbyCode in sessionStorage hebben, auto join
     const storedLobby = sessionStorage.getItem('currentLobbyId');
     if(storedLobby){
       currentLobbyId=storedLobby;
       listenToLobby(currentLobbyId);
-    } else {
-      show('lobby');
-    }
+    } else show('lobby');
   } else show('login');
 });
 
-async function assignColor(lobbyRef){ const snap = await lobbyRef.collection('players').get(); return playerColors[snap.size % playerColors.length]; }
+async function assignColorAndPosition(lobbyRef){
+  const snap = await lobbyRef.collection('players').get();
+  const index = snap.size % playerColors.length;
+  return { color: playerColors[index], pos: startPositions[index] };
+}
 
 createBtn.onclick=async()=>{
   try{
@@ -118,9 +120,9 @@ createBtn.onclick=async()=>{
     const lobbyRef=db.collection('lobbies').doc();
     currentLobbyId=lobbyRef.id;
     sessionStorage.setItem('currentLobbyId',currentLobbyId);
-    const color=await assignColor(lobbyRef);
     await lobbyRef.set({host:currentPlayerId,createdAt:firebase.firestore.FieldValue.serverTimestamp(),status:'waiting'});
-    await lobbyRef.collection('players').doc(currentPlayerId).set({id:currentPlayerId,nickname,x:0,y:0,score:0,color});
+    const {color,pos} = await assignColorAndPosition(lobbyRef);
+    await lobbyRef.collection('players').doc(currentPlayerId).set({id:currentPlayerId,nickname,x:pos.x,y:pos.y,score:0,color});
     for(let i=0;i<3;i++){const x=Math.floor(Math.random()*10),y=Math.floor(Math.random()*10); await lobbyRef.collection('smugglers').doc(`${x}_${y}`).set({x,y});}
     alert(`Lobby aangemaakt! Code: ${currentLobbyId}`);
     listenToLobby(currentLobbyId);
@@ -137,8 +139,8 @@ joinBtn.onclick=async()=>{
     if(!lobbySnap.exists) return alert('Lobby niet gevonden');
     currentLobbyId=code;
     sessionStorage.setItem('currentLobbyId',currentLobbyId);
-    const color=await assignColor(lobbyRef);
-    await lobbyRef.collection('players').doc(currentPlayerId).set({id:currentPlayerId,nickname,x:0,y:0,score:0,color});
+    const {color,pos} = await assignColorAndPosition(lobbyRef);
+    await lobbyRef.collection('players').doc(currentPlayerId).set({id:currentPlayerId,nickname,x:pos.x,y:pos.y,score:0,color});
     alert(`Je bent joined in lobby: ${code}`);
     listenToLobby(code);
   } catch(err){ console.error(err); alert('Fout bij joinen: '+err.message); }
@@ -148,18 +150,22 @@ function listenToLobby(lobbyId){
   show('game');
   const playersRef=db.collection('lobbies').doc(lobbyId).collection('players');
   const smugglersRef=db.collection('lobbies').doc(lobbyId).collection('smugglers');
-  renderBoard([],[]);
 
+  // Realtime players
   playersRef.onSnapshot(snapshot=>{
     const players=[];
     snapshot.forEach(doc=>players.push(doc.data()));
-    boardState.players=players;
-    smugglersRef.get().then(snap=>{
-      const smugglers=[]; snap.forEach(doc=>smugglers.push(doc.data())); boardState.smugglers=smugglers;
-      renderBoard(players,smugglers);
-      updateGameInfo(players);
-      console.log('BoardState:',boardState);
-    });
+    boardState.players = players;
+    renderBoard(boardState.players, boardState.smugglers);
+    updateGameInfo(players);
+  });
+
+  // Realtime smugglers
+  smugglersRef.onSnapshot(snapshot=>{
+    const smugglers=[];
+    snapshot.forEach(doc=>smugglers.push(doc.data()));
+    boardState.smugglers = smugglers;
+    renderBoard(boardState.players, boardState.smugglers);
   });
 }
 
