@@ -36,6 +36,7 @@
   <div id="currentUserInfo" style="margin-bottom:10px;"></div>
   <input id="nickname" placeholder="Nickname" />
   <button id="createLobby">Maak lobby</button>
+  <button id="restartLobby">(Her)start</button>
   <hr>
   <input id="lobbyCode" placeholder="Lobby code" />
   <button id="joinLobby">Join lobby</button>
@@ -89,6 +90,7 @@ let currentLobbyId=null,currentPlayerId=null,boardState={players:[],smugglers:[]
 const playerColors=['white','red','green','blue'];
 const createBtn=document.getElementById('createLobby');
 const joinBtn=document.getElementById('joinLobby');
+const restartBtn=document.getElementById('restartLobby');
 const startPositions = [{x:0,y:0},{x:9,y:0},{x:0,y:9},{x:9,y:9}];
 
 auth.onAuthStateChanged(user => {
@@ -121,7 +123,7 @@ createBtn.onclick=async()=>{
     const {color,pos} = await assignColorAndPosition(lobbyRef);
     await lobbyRef.collection('players').doc(currentPlayerId).set({id:currentPlayerId,nickname,x:pos.x,y:pos.y,score:0,color});
 
-    // Plaats altijd 3 smokkelaars bij lobby create
+    // Plaats 3 smokkelaars
     for(let i=0;i<3;i++){
       let x=Math.floor(Math.random()*10);
       let y=Math.floor(Math.random()*10);
@@ -145,7 +147,6 @@ joinBtn.onclick=async()=>{
     currentLobbyId=code;
     sessionStorage.setItem('currentLobbyId',currentLobbyId);
 
-    // Kleur en startpositie berekenen op basis van huidige spelers
     const {color,pos} = await assignColorAndPosition(lobbyRef);
     await lobbyRef.collection('players').doc(currentPlayerId).set({id:currentPlayerId,nickname,x:pos.x,y:pos.y,score:0,color});
 
@@ -154,12 +155,41 @@ joinBtn.onclick=async()=>{
   } catch(err){ console.error(err); alert('Fout bij joinen: '+err.message); }
 };
 
+restartBtn.onclick=async()=>{
+  if(!currentLobbyId) return alert('Geen actieve lobby');
+  const lobbyRef = db.collection('lobbies').doc(currentLobbyId);
+
+  const playersSnap = await lobbyRef.collection('players').get();
+  let i = 0;
+  const batch = db.batch();
+  playersSnap.forEach(doc => {
+    const pos = startPositions[i % startPositions.length];
+    const color = playerColors[i % playerColors.length];
+    batch.update(doc.ref, {x: pos.x, y: pos.y, color, score: 0});
+    i++;
+  });
+
+  // Verwijder oude smokkelaars
+  const smugSnap = await lobbyRef.collection('smugglers').get();
+  smugSnap.forEach(doc => batch.delete(doc.ref));
+
+  // Plaats 3 nieuwe smokkelaars
+  for(let j=0;j<3;j++){
+    let x=Math.floor(Math.random()*10);
+    let y=Math.floor(Math.random()*10);
+    const docRef = lobbyRef.collection('smugglers').doc(`${x}_${y}`);
+    batch.set(docRef, {x, y});
+  }
+
+  await batch.commit();
+  alert('Spel opnieuw gestart! Posities, kleuren en smokkelaars zijn gereset.');
+};
+
 function listenToLobby(lobbyId){
   show('game');
   const playersRef=db.collection('lobbies').doc(lobbyId).collection('players');
   const smugglersRef=db.collection('lobbies').doc(lobbyId).collection('smugglers');
 
-  // Realtime players
   playersRef.onSnapshot(snapshot=>{
     const players=[];
     snapshot.forEach(doc=>players.push(doc.data()));
@@ -168,7 +198,6 @@ function listenToLobby(lobbyId){
     updateGameInfo(players);
   });
 
-  // Realtime smugglers
   smugglersRef.onSnapshot(snapshot=>{
     const smugglers=[];
     snapshot.forEach(doc=>smugglers.push(doc.data()));
