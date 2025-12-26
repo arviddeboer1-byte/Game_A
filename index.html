@@ -36,30 +36,30 @@
 
   <div class="panel" data-player="0">
     <b>Wit</b> – score: <span class="score">0</span><br>
-    <input class="n1" type="number" min="1" max="9">
-    <input class="n2" type="number" min="1" max="9">
-    <button onclick="makeMove(0)">Spring</button>
+    <input class="n1" type="number" min="1" max="9" />
+    <input class="n2" type="number" min="1" max="9" />
+    <button>Spring</button>
   </div>
 
   <div class="panel" data-player="1">
     <b>Zwart</b> – score: <span class="score">0</span><br>
-    <input class="n1" type="number" min="1" max="9">
-    <input class="n2" type="number" min="1" max="9">
-    <button onclick="makeMove(1)">Spring</button>
+    <input class="n1" type="number" min="1" max="9" />
+    <input class="n2" type="number" min="1" max="9" />
+    <button>Spring</button>
   </div>
 
   <div class="panel" data-player="2">
     <b>Rood</b> – score: <span class="score">0</span><br>
-    <input class="n1" type="number" min="1" max="9">
-    <input class="n2" type="number" min="1" max="9">
-    <button onclick="makeMove(2)">Spring</button>
+    <input class="n1" type="number" min="1" max="9" />
+    <input class="n2" type="number" min="1" max="9" />
+    <button>Spring</button>
   </div>
 
   <div class="panel" data-player="3">
     <b>Groen</b> – score: <span class="score">0</span><br>
-    <input class="n1" type="number" min="1" max="9">
-    <input class="n2" type="number" min="1" max="9">
-    <button onclick="makeMove(3)">Spring</button>
+    <input class="n1" type="number" min="1" max="9" />
+    <input class="n2" type="number" min="1" max="9" />
+    <button>Spring</button>
   </div>
 </div>
 
@@ -119,16 +119,17 @@ function makeMove(playerIndex) {
   const panel = document.querySelectorAll('.panel')[playerIndex];
   const a = parseInt(panel.querySelector('.n1').value);
   const b = parseInt(panel.querySelector('.n2').value);
+
   if (!jumpMap[a] || !jumpMap[b]) return;
 
   const dx = jumpMap[a][0] + jumpMap[b][0];
   const dy = jumpMap[a][1] + jumpMap[b][1];
 
-  let p = players[playerIndex];
-  let nx = p.x + dx;
-  let ny = p.y + dy;
+  const p = players[playerIndex];
+  const nx = p.x + dx;
+  const ny = p.y + dy;
 
-  if (nx<0||nx>=10||ny<0||ny>=10) return;
+  if (nx < 0 || nx >= 10 || ny < 0 || ny >= 10) return;
 
   const smIndex = smugglers.findIndex(s => s.x === nx && s.y === ny);
   if (smIndex !== -1) {
@@ -142,6 +143,11 @@ function makeMove(playerIndex) {
 
   draw();
 }
+
+// koppel knoppen aan juiste speler
+Array.from(document.querySelectorAll('.panel')).forEach((panel, index) => {
+  panel.querySelector('button').addEventListener('click', () => makeMove(index));
+});
 
 placeSmugglers();
 draw();
