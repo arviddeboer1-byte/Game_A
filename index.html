@@ -109,12 +109,20 @@ auth.onAuthStateChanged(user => {
   }
 });
 
+// Kleuren array voor spelers
+const playerColors = ['white','red','green','blue'];
+
 // LOBBY FUNCTIES
 const createBtn = document.getElementById('createLobby');
 const joinBtn = document.getElementById('joinLobby');
 let currentLobbyId = null;
 let currentPlayerId = null;
 let boardState = { players: [], smugglers: [] };
+
+async function assignColor(lobbyRef){
+  const snap = await lobbyRef.collection('players').get();
+  return playerColors[snap.size % playerColors.length];
+}
 
 createBtn.onclick = async () => {
   try {
@@ -125,19 +133,10 @@ createBtn.onclick = async () => {
     currentLobbyId = lobbyRef.id;
     currentPlayerId = auth.currentUser.uid;
 
-    await lobbyRef.set({
-      host: currentPlayerId,
-      createdAt: firebase.firestore.FieldValue.serverTimestamp(),
-      status: 'waiting'
-    });
+    await lobbyRef.set({ host: currentPlayerId, createdAt: firebase.firestore.FieldValue.serverTimestamp(), status: 'waiting' });
 
-    await lobbyRef.collection('players').doc(currentPlayerId).set({
-      nickname,
-      x: 0,
-      y: 0,
-      score: 0,
-      color: 'white'
-    });
+    const color = await assignColor(lobbyRef);
+    await lobbyRef.collection('players').doc(currentPlayerId).set({ nickname, x: 0, y: 0, score: 0, color });
 
     // Plaats 3 smokkelaars random
     for(let i=0;i<3;i++){
@@ -148,10 +147,7 @@ createBtn.onclick = async () => {
 
     alert(`Lobby aangemaakt! Code: ${currentLobbyId}`);
     listenToLobby(currentLobbyId);
-  } catch(err){
-    console.error(err);
-    alert('Fout bij lobby maken: ' + err.message);
-  }
+  } catch(err){ console.error(err); alert('Fout bij lobby maken: '+err.message); }
 };
 
 joinBtn.onclick = async () => {
@@ -167,20 +163,12 @@ joinBtn.onclick = async () => {
     currentLobbyId = code;
     currentPlayerId = auth.currentUser.uid;
 
-    await lobbyRef.collection('players').doc(currentPlayerId).set({
-      nickname,
-      x: 0,
-      y: 0,
-      score: 0,
-      color: 'red'
-    });
+    const color = await assignColor(lobbyRef);
+    await lobbyRef.collection('players').doc(currentPlayerId).set({ nickname, x: 0, y: 0, score: 0, color });
 
     alert(`Je bent joined in lobby: ${code}`);
     listenToLobby(code);
-  } catch(err){
-    console.error(err);
-    alert('Fout bij joinen: ' + err.message);
-  }
+  } catch(err){ console.error(err); alert('Fout bij joinen: '+err.message); }
 };
 
 // Realtime lobby + board updates
@@ -189,40 +177,38 @@ function listenToLobby(lobbyId){
   const playersRef = db.collection('lobbies').doc(lobbyId).collection('players');
   const smugglersRef = db.collection('lobbies').doc(lobbyId).collection('smugglers');
 
-  // render initieel leeg bord
-  renderBoard([], []);
+  renderBoard([], []); // initial empty board
 
-  // realtime updates
-  playersRef.onSnapshot(snapshot=>{
+  playersRef.onSnapshot(snapshot => {
     const players = [];
-    snapshot.forEach(doc=>players.push(doc.data()));
+    snapshot.forEach(doc => players.push(doc.data()));
     boardState.players = players;
 
-    smugglersRef.get().then(snap=>{
+    smugglersRef.get().then(snap => {
       const smugglers = [];
-      snap.forEach(doc=>smugglers.push(doc.data()));
+      snap.forEach(doc => smugglers.push(doc.data()));
       boardState.smugglers = smugglers;
+
       renderBoard(players, smugglers);
       document.getElementById('gameTitle').innerText = `Lobby ${lobbyId} - Spelers: ${players.map(p=>p.nickname).join(', ')}`;
     });
   });
 
-  // helper: renderBoard
   function renderBoard(players, smugglers){
     const board = document.getElementById('board');
     board.innerHTML = '';
     for(let y=0;y<10;y++){
       for(let x=0;x<10;x++){
         const cell = document.createElement('div');
-        cell.className = 'cell';
-        const playerHere = players.find(p => p.x===x && p.y===y);
-        if(playerHere) {
+        cell.className='cell';
+        const playerHere = players.find(p=>p.x===x && p.y===y);
+        if(playerHere){
           const span = document.createElement('span');
           span.className='player';
           span.style.color = playerHere.color;
           span.textContent='♞';
           cell.appendChild(span);
-        } else if(smugglers.find(s => s.x===x && s.y===y)){
+        } else if(smugglers.find(s=>s.x===x && s.y===y)){
           const span = document.createElement('span');
           span.className='smuggler';
           span.textContent='♟';
@@ -234,7 +220,7 @@ function listenToLobby(lobbyId){
   }
 }
 
-// PAARDENSPRONG LOGICA
+// Paardensprong logica
 const moveBtn = document.getElementById('moveBtn');
 moveBtn.onclick = async () => {
   const a = parseInt(document.getElementById('step1').value);
@@ -244,7 +230,8 @@ moveBtn.onclick = async () => {
   const dx = getDeltaX(a,b);
   const dy = getDeltaY(a,b);
 
-  let player = boardState.players.find(p=>p.color=== (currentPlayerId===auth.currentUser.uid ? 'white' : 'red'));
+  let player = boardState.players.find(p=>p.color === boardState.players.find(p=>p.id===currentPlayerId)?.color);
+  if(!player) player = boardState.players.find(p=>p.id===currentPlayerId);
   if(!player) return;
 
   let newX = Math.max(0,Math.min(9,player.x+dx));
@@ -252,7 +239,6 @@ moveBtn.onclick = async () => {
 
   const playerRef = db.collection('lobbies').doc(currentLobbyId).collection('players').doc(currentPlayerId);
 
-  // check smokkelaar
   const smug = boardState.smugglers.find(s=>s.x===newX && s.y===newY);
   if(smug){
     await db.collection('lobbies').doc(currentLobbyId).collection('smugglers').doc(`${smug.x}_${smug.y}`).delete();
@@ -263,16 +249,9 @@ moveBtn.onclick = async () => {
   await playerRef.update({x:newX,y:newY,score:player.score});
 };
 
-// helper voor mini-raster
-function getDeltaX(a,b){
-  const coords = {1:[0,0],2:[1,0],3:[2,0],4:[0,1],5:[1,1],6:[2,1],7:[0,2],8:[1,2],9:[2,2]};
-  return coords[b][0]-coords[a][0];
-}
-function getDeltaY(a,b){
-  const coords = {1:[0,0],2:[1,0],3:[2,0],4:[0,1],5:[1,1],6:[2,1],7:[0,2],8:[1,2],9:[2,2]};
-  return coords[b][1]-coords[a][1];
-}
-</script>
+function getDeltaX(a,b){ const coords={1:[0,0],2:[1,0],3:[2,0],4:[0,1],5:[1,1],6:[2,1],7:[0,2],8:[1,2],9:[2,2]}; return coords[b][0]-coords[a][0]; }
+function getDeltaY(a,b){ const coords={1:[0,0],2:[1,0],3:[2,0],4:[0,1],5:[1,1],6:[2,1],7:[0,2],8:[1,2],9:[2,2]}; return coords[b][1]-coords[a][1]; }
 
+</script>
 </body>
 </html>
