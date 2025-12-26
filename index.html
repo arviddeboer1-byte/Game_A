@@ -55,7 +55,7 @@
 </div>
 
 <script>
-window.onload = () => {
+window.addEventListener('DOMContentLoaded', () => {
   const firebaseConfig = {
     apiKey: "AIzaSyA8LmWdVyebJSYLmKOseg8UFxZege5buMg",
     authDomain: "paardensprong-game.firebaseapp.com",
@@ -239,7 +239,7 @@ window.onload = () => {
 
   function getDeltaX(a,b){ const coords={1:[0,0],2:[1,0],3:[2,0],4:[0,1],5:[1,1],6:[2,1],7:[0,2],8:[1,2],9:[2,2]}; return coords[b][0]-coords[a][0]; }
   function getDeltaY(a,b){ const coords={1:[0,0],2:[1,0],3:[2,0],4:[0,1],5:[1,1],6:[2,1],7:[0,2],8:[1,2],9:[2,2]}; return coords[b][1]-coords[a][1]; }
-};
+});
 </script>
 </body>
 </html>
