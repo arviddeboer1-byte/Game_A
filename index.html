@@ -24,7 +24,6 @@
 </head>
 <body>
 
-<!-- LOGIN SCREEN -->
 <div id="loginScreen" class="screen active">
   <h2>Login</h2>
   <input id="email" type="email" placeholder="E-mail" />
@@ -32,7 +31,6 @@
   <button id="loginBtn">Inloggen / Registreren</button>
 </div>
 
-<!-- LOBBY SCREEN -->
 <div id="lobbyScreen" class="screen">
   <h2>Lobby</h2>
   <div id="currentUserInfo" style="margin-bottom:10px;"></div>
@@ -43,7 +41,6 @@
   <button id="joinLobby">Join lobby</button>
 </div>
 
-<!-- GAME SCREEN -->
 <div id="gameScreen" class="screen">
   <h2 id="gameTitle"></h2>
   <div id="gameInfo" style="margin-bottom:10px;"></div>
@@ -92,7 +89,6 @@ let currentLobbyId=null,currentPlayerId=null,boardState={players:[],smugglers:[]
 const playerColors=['white','red','green','blue'];
 const createBtn=document.getElementById('createLobby');
 const joinBtn=document.getElementById('joinLobby');
-
 const startPositions = [{x:0,y:0},{x:9,y:0},{x:0,y:9},{x:9,y:9}];
 
 auth.onAuthStateChanged(user => {
@@ -121,9 +117,17 @@ createBtn.onclick=async()=>{
     currentLobbyId=lobbyRef.id;
     sessionStorage.setItem('currentLobbyId',currentLobbyId);
     await lobbyRef.set({host:currentPlayerId,createdAt:firebase.firestore.FieldValue.serverTimestamp(),status:'waiting'});
+
     const {color,pos} = await assignColorAndPosition(lobbyRef);
     await lobbyRef.collection('players').doc(currentPlayerId).set({id:currentPlayerId,nickname,x:pos.x,y:pos.y,score:0,color});
-    for(let i=0;i<3;i++){const x=Math.floor(Math.random()*10),y=Math.floor(Math.random()*10); await lobbyRef.collection('smugglers').doc(`${x}_${y}`).set({x,y});}
+
+    // Plaats altijd 3 smokkelaars bij lobby create
+    for(let i=0;i<3;i++){
+      let x=Math.floor(Math.random()*10);
+      let y=Math.floor(Math.random()*10);
+      await lobbyRef.collection('smugglers').doc(`${x}_${y}`).set({x,y});
+    }
+
     alert(`Lobby aangemaakt! Code: ${currentLobbyId}`);
     listenToLobby(currentLobbyId);
   } catch(err){ console.error(err); alert('Fout bij lobby maken: '+err.message); }
@@ -137,10 +141,14 @@ joinBtn.onclick=async()=>{
     const lobbyRef=db.collection('lobbies').doc(code);
     const lobbySnap=await lobbyRef.get();
     if(!lobbySnap.exists) return alert('Lobby niet gevonden');
+
     currentLobbyId=code;
     sessionStorage.setItem('currentLobbyId',currentLobbyId);
+
+    // Kleur en startpositie berekenen op basis van huidige spelers
     const {color,pos} = await assignColorAndPosition(lobbyRef);
     await lobbyRef.collection('players').doc(currentPlayerId).set({id:currentPlayerId,nickname,x:pos.x,y:pos.y,score:0,color});
+
     alert(`Je bent joined in lobby: ${code}`);
     listenToLobby(code);
   } catch(err){ console.error(err); alert('Fout bij joinen: '+err.message); }
