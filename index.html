@@ -67,11 +67,17 @@
 const SIZE = 10;
 const board = document.getElementById('board');
 
-const jumpMap = {
-  1:[-1,-2], 2:[0,-2], 3:[1,-2],
-  4:[-2,0], 5:[0,0], 6:[2,0],
-  7:[-1,2], 8:[0,2], 9:[1,2]
-};
+// Mini-raster:
+// 1 2 3
+// 4 5 6
+// 7 8 9
+// Beweging = verschil tussen twee gekozen vakjes
+function numToPos(n) {
+  return {
+    x: (n - 1) % 3,
+    y: Math.floor((n - 1) / 3)
+  };
+}
 
 let players = [
   {x:0,y:0,color:'white',score:0},
@@ -120,10 +126,13 @@ function makeMove(playerIndex) {
   const a = parseInt(panel.querySelector('.n1').value);
   const b = parseInt(panel.querySelector('.n2').value);
 
-  if (!jumpMap[a] || !jumpMap[b]) return;
+  if (!(a >= 1 && a <= 9 && b >= 1 && b <= 9)) return;
 
-  const dx = jumpMap[a][0] + jumpMap[b][0];
-  const dy = jumpMap[a][1] + jumpMap[b][1];
+  const p1 = numToPos(a);
+  const p2 = numToPos(b);
+
+  const dx = p2.x - p1.x;
+  const dy = p2.y - p1.y;
 
   const p = players[playerIndex];
   const nx = p.x + dx;
@@ -144,7 +153,6 @@ function makeMove(playerIndex) {
   draw();
 }
 
-// koppel knoppen aan juiste speler
 Array.from(document.querySelectorAll('.panel')).forEach((panel, index) => {
   panel.querySelector('button').addEventListener('click', () => makeMove(index));
 });
