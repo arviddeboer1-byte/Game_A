@@ -35,6 +35,7 @@
 <!-- LOBBY SCREEN -->
 <div id="lobbyScreen" class="screen">
   <h2>Lobby</h2>
+  <div id="currentUserInfo" style="margin-bottom:10px;"></div>
   <input id="nickname" placeholder="Nickname" />
   <button id="createLobby">Maak lobby</button>
   <hr>
@@ -67,71 +68,80 @@ const firebaseConfig = {
   measurementId: "G-2CEG2V76FJ"
 };
 
-// Initialize Firebase
 firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-// UI helpers
 const screens = { login: document.getElementById('loginScreen'), lobby: document.getElementById('lobbyScreen'), game: document.getElementById('gameScreen') };
 function show(screen){ Object.values(screens).forEach(s => s.classList.remove('active')); screens[screen].classList.add('active'); }
 
-// Login / registratie
 const loginBtn = document.getElementById('loginBtn');
 loginBtn.onclick = () => {
   const email = document.getElementById('email').value;
   const password = document.getElementById('password').value;
-  if (!email || !password) return alert('Vul e-mail en wachtwoord in');
-  auth.signInWithEmailAndPassword(email, password)
-    .then(() => console.log('Ingelogd'))
-    .catch(() => {
-      auth.createUserWithEmailAndPassword(email, password)
-        .then(() => console.log('Account aangemaakt en ingelogd'))
-        .catch(err => alert('Fout bij aanmaken account: ' + err.message));
+  if(!email||!password) return alert('Vul e-mail en wachtwoord in');
+  auth.signInWithEmailAndPassword(email,password)
+    .then(()=>console.log('Ingelogd'))
+    .catch(()=>{
+      auth.createUserWithEmailAndPassword(email,password)
+        .then(()=>console.log('Account aangemaakt en ingelogd'))
+        .catch(err=>alert('Fout bij aanmaken account: '+err.message));
     });
 };
 
-auth.onAuthStateChanged(user => {
-  if(user){ console.log('Gebruiker ingelogd:',user.email); show('lobby'); }
-  else{ console.log('Geen gebruiker ingelogd'); show('login'); }
-});
-
+let currentLobbyId=null,currentPlayerId=null,boardState={players:[],smugglers:[]},nickname='';
 const playerColors=['white','red','green','blue'];
 const createBtn=document.getElementById('createLobby');
 const joinBtn=document.getElementById('joinLobby');
-let currentLobbyId=null,currentPlayerId=null,boardState={players:[],smugglers:[]};
+
+auth.onAuthStateChanged(user => {
+  if(user){
+    document.getElementById('currentUserInfo').innerText = `Ingelogd als: ${user.email}`;
+    currentPlayerId=user.uid;
+    // Als we een lobbyCode in sessionStorage hebben, auto join
+    const storedLobby = sessionStorage.getItem('currentLobbyId');
+    if(storedLobby){
+      currentLobbyId=storedLobby;
+      listenToLobby(currentLobbyId);
+    } else {
+      show('lobby');
+    }
+  } else show('login');
+});
 
 async function assignColor(lobbyRef){ const snap = await lobbyRef.collection('players').get(); return playerColors[snap.size % playerColors.length]; }
 
 createBtn.onclick=async()=>{
   try{
-    const nickname=document.getElementById('nickname').value.trim();
+    nickname=document.getElementById('nickname').value.trim();
     if(!nickname) return alert('Vul je nickname in');
     const lobbyRef=db.collection('lobbies').doc();
-    currentLobbyId=lobbyRef.id; currentPlayerId=auth.currentUser.uid;
-    await lobbyRef.set({host:currentPlayerId,createdAt:firebase.firestore.FieldValue.serverTimestamp(),status:'waiting'});
+    currentLobbyId=lobbyRef.id;
+    sessionStorage.setItem('currentLobbyId',currentLobbyId);
     const color=await assignColor(lobbyRef);
+    await lobbyRef.set({host:currentPlayerId,createdAt:firebase.firestore.FieldValue.serverTimestamp(),status:'waiting'});
     await lobbyRef.collection('players').doc(currentPlayerId).set({id:currentPlayerId,nickname,x:0,y:0,score:0,color});
     for(let i=0;i<3;i++){const x=Math.floor(Math.random()*10),y=Math.floor(Math.random()*10); await lobbyRef.collection('smugglers').doc(`${x}_${y}`).set({x,y});}
     alert(`Lobby aangemaakt! Code: ${currentLobbyId}`);
     listenToLobby(currentLobbyId);
-  }catch(err){console.error(err);alert('Fout bij lobby maken: '+err.message);}
+  } catch(err){ console.error(err); alert('Fout bij lobby maken: '+err.message); }
 };
 
 joinBtn.onclick=async()=>{
   try{
+    nickname=document.getElementById('nickname').value.trim();
     const code=document.getElementById('lobbyCode').value.trim();
-    const nickname=document.getElementById('nickname').value.trim();
-    if(!code||!nickname) return alert('Vul lobby code en nickname in');
+    if(!nickname||!code) return alert('Vul nickname en lobby code in');
     const lobbyRef=db.collection('lobbies').doc(code);
     const lobbySnap=await lobbyRef.get();
     if(!lobbySnap.exists) return alert('Lobby niet gevonden');
-    currentLobbyId=code; currentPlayerId=auth.currentUser.uid;
+    currentLobbyId=code;
+    sessionStorage.setItem('currentLobbyId',currentLobbyId);
     const color=await assignColor(lobbyRef);
     await lobbyRef.collection('players').doc(currentPlayerId).set({id:currentPlayerId,nickname,x:0,y:0,score:0,color});
     alert(`Je bent joined in lobby: ${code}`);
     listenToLobby(code);
-  }catch(err){console.error(err);alert('Fout bij joinen: '+err.message);}
+  } catch(err){ console.error(err); alert('Fout bij joinen: '+err.message); }
 };
 
 function listenToLobby(lobbyId){
@@ -139,27 +149,28 @@ function listenToLobby(lobbyId){
   const playersRef=db.collection('lobbies').doc(lobbyId).collection('players');
   const smugglersRef=db.collection('lobbies').doc(lobbyId).collection('smugglers');
   renderBoard([],[]);
+
   playersRef.onSnapshot(snapshot=>{
     const players=[];
     snapshot.forEach(doc=>players.push(doc.data()));
     boardState.players=players;
     smugglersRef.get().then(snap=>{
       const smugglers=[]; snap.forEach(doc=>smugglers.push(doc.data())); boardState.smugglers=smugglers;
-      renderBoard(players,smugglers); updateGameInfo(players);
+      renderBoard(players,smugglers);
+      updateGameInfo(players);
       console.log('BoardState:',boardState);
     });
   });
 }
 
 function renderBoard(players,smugglers){
-  const board=document.getElementById('board');
-  board.innerHTML='';
+  const board=document.getElementById('board'); board.innerHTML='';
   for(let y=0;y<10;y++){
     for(let x=0;x<10;x++){
       const cell=document.createElement('div'); cell.className='cell';
       const playerHere=players.find(p=>p.x===x && p.y===y);
-      if(playerHere){const span=document.createElement('span');span.className='player';span.style.color=playerHere.color;span.textContent='♞';cell.appendChild(span);}
-      else if(smugglers.find(s=>s.x===x && s.y===y)){const span=document.createElement('span');span.className='smuggler';span.textContent='♟';cell.appendChild(span);}
+      if(playerHere){ const span=document.createElement('span'); span.className='player'; span.style.color=playerHere.color; span.textContent='♞'; cell.appendChild(span); }
+      else if(smugglers.find(s=>s.x===x && s.y===y)){ const span=document.createElement('span'); span.className='smuggler'; span.textContent='♟'; cell.appendChild(span); }
       board.appendChild(cell);
     }
   }
@@ -181,7 +192,7 @@ moveBtn.onclick=async()=>{
   let newX=Math.max(0,Math.min(9,player.x+dx)); let newY=Math.max(0,Math.min(9,player.y+dy));
   const playerRef=db.collection('lobbies').doc(currentLobbyId).collection('players').doc(currentPlayerId);
   const smug=boardState.smugglers.find(s=>s.x===newX && s.y===newY);
-  if(smug){await db.collection('lobbies').doc(currentLobbyId).collection('smugglers').doc(`${smug.x}_${smug.y}`).delete();player.score+=1;alert('Je hebt een smokkelaar gevangen! Score: '+player.score);}
+  if(smug){ await db.collection('lobbies').doc(currentLobbyId).collection('smugglers').doc(`${smug.x}_${smug.y}`).delete(); player.score+=1; alert('Je hebt een smokkelaar gevangen! Score: '+player.score); }
   await playerRef.update({x:newX,y:newY,score:player.score});
 };
 
