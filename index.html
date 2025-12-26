@@ -36,7 +36,6 @@
   <div id="currentUserInfo" style="margin-bottom:10px;"></div>
   <input id="nickname" placeholder="Nickname" />
   <button id="createLobby">Maak lobby</button>
-  <button id="restartLobby">(Her)start</button>
   <hr>
   <input id="lobbyCode" placeholder="Lobby code" />
   <button id="joinLobby">Join lobby</button>
@@ -45,6 +44,7 @@
 <div id="gameScreen" class="screen">
   <h2 id="gameTitle"></h2>
   <div id="gameInfo" style="margin-bottom:10px;"></div>
+  <button id="restartBtn">Herstart</button> <!-- knop boven bord -->
   <div id="board"></div>
   <div style="margin-top:10px;">
     <p>Paardensprong invoer (1-9 mini-raster):</p>
@@ -90,7 +90,7 @@ let currentLobbyId=null,currentPlayerId=null,boardState={players:[],smugglers:[]
 const playerColors=['white','red','green','blue'];
 const createBtn=document.getElementById('createLobby');
 const joinBtn=document.getElementById('joinLobby');
-const restartBtn=document.getElementById('restartLobby');
+const restartBtn=document.getElementById('restartBtn');
 const startPositions = [{x:0,y:0},{x:9,y:0},{x:0,y:9},{x:9,y:9}];
 
 auth.onAuthStateChanged(user => {
