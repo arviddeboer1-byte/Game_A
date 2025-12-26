@@ -76,22 +76,31 @@ function show(screen) {
   screens[screen].classList.add('active');
 }
 
-// Auth
+// Login / registratie
 const loginBtn = document.getElementById('loginBtn');
-loginBtn.onclick = async () => {
+loginBtn.onclick = () => {
   const email = document.getElementById('email').value;
   const password = document.getElementById('password').value;
   if (!email || !password) return alert('Vul e-mail en wachtwoord in');
-  try {
-    await auth.signInWithEmailAndPassword(email, password);
-  } catch {
-    await auth.createUserWithEmailAndPassword(email, password);
-  }
+
+  auth.signInWithEmailAndPassword(email, password)
+    .then(() => console.log('Ingelogd'))
+    .catch(() => {
+      auth.createUserWithEmailAndPassword(email, password)
+        .then(() => console.log('Account aangemaakt en ingelogd'))
+        .catch(err => alert('Fout bij aanmaken account: ' + err.message));
+    });
 };
 
+// Auth state listener
 auth.onAuthStateChanged(user => {
-  if (user) show('lobby');
-  else show('login');
+  if (user) {
+    console.log('Gebruiker ingelogd:', user.email);
+    show('lobby');
+  } else {
+    console.log('Geen gebruiker ingelogd');
+    show('login');
+  }
 });
 
 // Lobby placeholders
