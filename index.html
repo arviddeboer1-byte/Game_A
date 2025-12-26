@@ -5,58 +5,21 @@
   <title>Paardenspel – Multiplayer</title>
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- Firebase SDKs -->
+  <!-- Firebase compat SDKs -->
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
   <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
   <style>
-    body {
-      margin: 0;
-      font-family: sans-serif;
-      background: #1e1e1e;
-      color: white;
-    }
-
-    .screen {
-      display: none;
-      padding: 20px;
-    }
-
-    .active {
-      display: block;
-    }
-
-    input, button {
-      padding: 10px;
-      margin: 5px 0;
-      font-size: 16px;
-    }
-
-    button {
-      cursor: pointer;
-    }
-
-    #board {
-      display: grid;
-      grid-template-columns: repeat(10, 40px);
-      grid-template-rows: repeat(10, 40px);
-      gap: 2px;
-      margin-top: 20px;
-    }
-
-    .cell {
-      width: 40px;
-      height: 40px;
-      background: #444;
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      font-size: 22px;
-    }
-
-    .player { color: white; }
-    .smuggler { color: gold; }
+    body { margin:0; font-family:sans-serif; background:#1e1e1e; color:white; }
+    .screen { display:none; padding:20px; }
+    .active { display:block; }
+    input, button { padding:10px; margin:5px 0; font-size:16px; }
+    button { cursor:pointer; }
+    #board { display:grid; grid-template-columns: repeat(10,40px); grid-template-rows: repeat(10,40px); gap:2px; margin-top:20px; }
+    .cell { width:40px; height:40px; background:#444; display:flex; align-items:center; justify-content:center; font-size:22px; }
+    .player { color:white; }
+    .smuggler { color:gold; }
   </style>
 </head>
 <body>
@@ -86,15 +49,19 @@
 </div>
 
 <script>
-// Firebase config (VUL DIT ZELF IN)
+// Firebase config
 const firebaseConfig = {
-  apiKey: "YOUR_API_KEY",
-  authDomain: "YOUR_PROJECT.firebaseapp.com",
-  projectId: "YOUR_PROJECT_ID"
+  apiKey: "AIzaSyA8LmWdVyebJSYLmKOseg8UFxZege5buMg",
+  authDomain: "paardensprong-game.firebaseapp.com",
+  projectId: "paardensprong-game",
+  storageBucket: "paardensprong-game.appspot.com",
+  messagingSenderId: "815440447520",
+  appId: "1:815440447520:web:72569450503b4e77b85445",
+  measurementId: "G-2CEG2V76FJ"
 };
 
+// Initialize Firebase
 firebase.initializeApp(firebaseConfig);
-
 const auth = firebase.auth();
 const db = firebase.firestore();
 
@@ -104,7 +71,6 @@ const screens = {
   lobby: document.getElementById('lobbyScreen'),
   game: document.getElementById('gameScreen')
 };
-
 function show(screen) {
   Object.values(screens).forEach(s => s.classList.remove('active'));
   screens[screen].classList.add('active');
@@ -115,7 +81,7 @@ const loginBtn = document.getElementById('loginBtn');
 loginBtn.onclick = async () => {
   const email = document.getElementById('email').value;
   const password = document.getElementById('password').value;
-
+  if (!email || !password) return alert('Vul e-mail en wachtwoord in');
   try {
     await auth.signInWithEmailAndPassword(email, password);
   } catch {
@@ -123,16 +89,12 @@ loginBtn.onclick = async () => {
   }
 };
 
-// Auth state listener
 auth.onAuthStateChanged(user => {
-  if (user) {
-    show('lobby');
-  } else {
-    show('login');
-  }
+  if (user) show('lobby');
+  else show('login');
 });
 
-// Lobby placeholders (volgende stap)
+// Lobby placeholders
 document.getElementById('createLobby').onclick = () => alert('Lobby maken komt in stap 2');
 document.getElementById('joinLobby').onclick = () => alert('Lobby joinen komt in stap 2');
 </script>
