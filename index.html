@@ -103,9 +103,66 @@ auth.onAuthStateChanged(user => {
   }
 });
 
-// Lobby placeholders
-document.getElementById('createLobby').onclick = () => alert('Lobby maken komt in stap 2');
-document.getElementById('joinLobby').onclick = () => alert('Lobby joinen komt in stap 2');
+// LOBBY FUNCTIES
+const createBtn = document.getElementById('createLobby');
+const joinBtn = document.getElementById('joinLobby');
+
+createBtn.onclick = async () => {
+  const nickname = document.getElementById('nickname').value.trim();
+  if (!nickname) return alert('Vul je nickname in');
+
+  const lobbyRef = db.collection('lobbies').doc();
+  const lobbyId = lobbyRef.id;
+
+  await lobbyRef.set({
+    host: auth.currentUser.uid,
+    createdAt: firebase.firestore.FieldValue.serverTimestamp(),
+    status: 'waiting'
+  });
+
+  await lobbyRef.collection('players').doc(auth.currentUser.uid).set({
+    nickname,
+    x: 0,
+    y: 0,
+    score: 0
+  });
+
+  alert(`Lobby aangemaakt! Code: ${lobbyId}`);
+  listenToLobby(lobbyId);
+};
+
+joinBtn.onclick = async () => {
+  const code = document.getElementById('lobbyCode').value.trim();
+  const nickname = document.getElementById('nickname').value.trim();
+  if (!code || !nickname) return alert('Vul lobby code en nickname in');
+
+  const lobbyRef = db.collection('lobbies').doc(code);
+  const lobbySnap = await lobbyRef.get();
+  if (!lobbySnap.exists) return alert('Lobby niet gevonden');
+
+  await lobbyRef.collection('players').doc(auth.currentUser.uid).set({
+    nickname,
+    x: 0,
+    y: 0,
+    score: 0
+  });
+
+  alert(`Je bent joined in lobby: ${code}`);
+  listenToLobby(code);
+};
+
+// Realtime lobby updates
+function listenToLobby(lobbyId) {
+  show('game');
+
+  const playersRef = db.collection('lobbies').doc(lobbyId).collection('players');
+  playersRef.onSnapshot(snapshot => {
+    const players = [];
+    snapshot.forEach(doc => players.push(doc.data()));
+    console.log('Huidige spelers in lobby:', players);
+    document.getElementById('gameTitle').innerText = `Lobby ${lobbyId} - Spelers: ${players.map(p => p.nickname).join(', ')}`;
+  });
+}
 </script>
 
 </body>
