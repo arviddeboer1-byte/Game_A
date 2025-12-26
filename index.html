@@ -114,14 +114,14 @@ const createBtn = document.getElementById('createLobby');
 const joinBtn = document.getElementById('joinLobby');
 let currentLobbyId = null;
 let currentPlayerId = null;
-let boardState = {}; // spelers en smokkelaars
+let boardState = { players: [], smugglers: [] };
 
 createBtn.onclick = async () => {
   try {
     const nickname = document.getElementById('nickname').value.trim();
     if (!nickname) return alert('Vul je nickname in');
 
-    const lobbyRef = db.collection('lobbies').doc(); // automatisch ID
+    const lobbyRef = db.collection('lobbies').doc();
     currentLobbyId = lobbyRef.id;
     currentPlayerId = auth.currentUser.uid;
 
@@ -189,7 +189,25 @@ function listenToLobby(lobbyId){
   const playersRef = db.collection('lobbies').doc(lobbyId).collection('players');
   const smugglersRef = db.collection('lobbies').doc(lobbyId).collection('smugglers');
 
-  // board render
+  // render initieel leeg bord
+  renderBoard([], []);
+
+  // realtime updates
+  playersRef.onSnapshot(snapshot=>{
+    const players = [];
+    snapshot.forEach(doc=>players.push(doc.data()));
+    boardState.players = players;
+
+    smugglersRef.get().then(snap=>{
+      const smugglers = [];
+      snap.forEach(doc=>smugglers.push(doc.data()));
+      boardState.smugglers = smugglers;
+      renderBoard(players, smugglers);
+      document.getElementById('gameTitle').innerText = `Lobby ${lobbyId} - Spelers: ${players.map(p=>p.nickname).join(', ')}`;
+    });
+  });
+
+  // helper: renderBoard
   function renderBoard(players, smugglers){
     const board = document.getElementById('board');
     board.innerHTML = '';
@@ -214,20 +232,6 @@ function listenToLobby(lobbyId){
       }
     }
   }
-
-  // realtime updates
-  playersRef.onSnapshot(snapshot=>{
-    const players = [];
-    snapshot.forEach(doc=>players.push(doc.data()));
-    boardState.players = players;
-    smugglersRef.get().then(snap=>{
-      const smugglers = [];
-      snap.forEach(doc=>smugglers.push(doc.data()));
-      boardState.smugglers = smugglers;
-      renderBoard(players, smugglers);
-      document.getElementById('gameTitle').innerText = `Lobby ${lobbyId} - Spelers: ${players.map(p=>p.nickname).join(', ')}`;
-    });
-  });
 }
 
 // PAARDENSPRONG LOGICA
@@ -261,24 +265,12 @@ moveBtn.onclick = async () => {
 
 // helper voor mini-raster
 function getDeltaX(a,b){
-  const coords = {
-    1:[0,0],2:[1,0],3:[2,0],
-    4:[0,1],5:[1,1],6:[2,1],
-    7:[0,2],8:[1,2],9:[2,2]
-  };
-  const [x1,_] = coords[a];
-  const [x2,_2] = coords[b];
-  return x2-x1;
+  const coords = {1:[0,0],2:[1,0],3:[2,0],4:[0,1],5:[1,1],6:[2,1],7:[0,2],8:[1,2],9:[2,2]};
+  return coords[b][0]-coords[a][0];
 }
 function getDeltaY(a,b){
-  const coords = {
-    1:[0,0],2:[1,0],3:[2,0],
-    4:[0,1],5:[1,1],6:[2,1],
-    7:[0,2],8:[1,2],9:[2,2]
-  };
-  const [_,y1] = coords[a];
-  const [__ ,y2] = coords[b];
-  return y2-y1;
+  const coords = {1:[0,0],2:[1,0],3:[2,0],4:[0,1],5:[1,1],6:[2,1],7:[0,2],8:[1,2],9:[2,2]};
+  return coords[b][1]-coords[a][1];
 }
 </script>
 
