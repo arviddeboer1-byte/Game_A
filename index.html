@@ -1,0 +1,150 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+  <meta charset="UTF-8" />
+  <title>Paardenspel</title>
+  <style>
+    body { font-family: sans-serif; background:#222; color:white; display:flex; gap:20px; }
+    #board {
+      display:grid;
+      grid-template-columns: repeat(10, 48px);
+      grid-template-rows: repeat(10, 48px);
+      gap:2px;
+    }
+    .cell {
+      width:48px; height:48px;
+      background:#444;
+      display:flex;
+      align-items:center;
+      justify-content:center;
+      font-size:24px;
+    }
+    .white { color:white; }
+    .black { color:black; background:#eee; }
+    .red { color:red; }
+    .green { color:lime; }
+    .smuggler { color:gold; }
+    .panel { border:1px solid #555; padding:10px; margin-bottom:10px; }
+  </style>
+</head>
+<body>
+
+<div id="board"></div>
+
+<div id="controls">
+  <h2>Spelers</h2>
+
+  <div class="panel" data-player="0">
+    <b>Wit</b> – score: <span class="score">0</span><br>
+    <input class="n1" type="number" min="1" max="9">
+    <input class="n2" type="number" min="1" max="9">
+    <button onclick="makeMove(0)">Spring</button>
+  </div>
+
+  <div class="panel" data-player="1">
+    <b>Zwart</b> – score: <span class="score">0</span><br>
+    <input class="n1" type="number" min="1" max="9">
+    <input class="n2" type="number" min="1" max="9">
+    <button onclick="makeMove(1)">Spring</button>
+  </div>
+
+  <div class="panel" data-player="2">
+    <b>Rood</b> – score: <span class="score">0</span><br>
+    <input class="n1" type="number" min="1" max="9">
+    <input class="n2" type="number" min="1" max="9">
+    <button onclick="makeMove(2)">Spring</button>
+  </div>
+
+  <div class="panel" data-player="3">
+    <b>Groen</b> – score: <span class="score">0</span><br>
+    <input class="n1" type="number" min="1" max="9">
+    <input class="n2" type="number" min="1" max="9">
+    <button onclick="makeMove(3)">Spring</button>
+  </div>
+</div>
+
+<script>
+const SIZE = 10;
+const board = document.getElementById('board');
+
+const jumpMap = {
+  1:[-1,-2], 2:[0,-2], 3:[1,-2],
+  4:[-2,0], 5:[0,0], 6:[2,0],
+  7:[-1,2], 8:[0,2], 9:[1,2]
+};
+
+let players = [
+  {x:0,y:0,color:'white',score:0},
+  {x:9,y:0,color:'black',score:0},
+  {x:0,y:9,color:'red',score:0},
+  {x:9,y:9,color:'green',score:0}
+];
+
+let smugglers = [];
+
+function placeSmugglers() {
+  while (smugglers.length < 3) {
+    let x = Math.floor(Math.random()*10);
+    let y = Math.floor(Math.random()*10);
+    if (!players.some(p=>p.x===x && p.y===y)) {
+      smugglers.push({x,y});
+    }
+  }
+}
+
+function draw() {
+  board.innerHTML = '';
+  for (let y=0;y<SIZE;y++){
+    for (let x=0;x<SIZE;x++){
+      const d = document.createElement('div');
+      d.className = 'cell';
+
+      const p = players.find(p=>p.x===x && p.y===y);
+      const s = smugglers.find(s=>s.x===x && s.y===y);
+
+      if (p) {
+        d.textContent = '♞';
+        d.classList.add(p.color);
+      } else if (s) {
+        d.textContent = '♟';
+        d.classList.add('smuggler');
+      }
+
+      board.appendChild(d);
+    }
+  }
+}
+
+function makeMove(playerIndex) {
+  const panel = document.querySelectorAll('.panel')[playerIndex];
+  const a = parseInt(panel.querySelector('.n1').value);
+  const b = parseInt(panel.querySelector('.n2').value);
+  if (!jumpMap[a] || !jumpMap[b]) return;
+
+  const dx = jumpMap[a][0] + jumpMap[b][0];
+  const dy = jumpMap[a][1] + jumpMap[b][1];
+
+  let p = players[playerIndex];
+  let nx = p.x + dx;
+  let ny = p.y + dy;
+
+  if (nx<0||nx>=10||ny<0||ny>=10) return;
+
+  const smIndex = smugglers.findIndex(s => s.x === nx && s.y === ny);
+  if (smIndex !== -1) {
+    smugglers.splice(smIndex, 1);
+    p.score++;
+    panel.querySelector('.score').textContent = p.score;
+  }
+
+  p.x = nx;
+  p.y = ny;
+
+  draw();
+}
+
+placeSmugglers();
+draw();
+</script>
+</body>
+</html>
