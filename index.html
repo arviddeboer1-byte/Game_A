@@ -1,26 +1,26 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
-  <meta charset="UTF-8" />
-  <title>Paardenspel – Multiplayer</title>
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="UTF-8" />
+<title>Paardenspel – Multiplayer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-  <!-- Firebase compat SDKs -->
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<!-- Firebase compat SDKs -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
-  <style>
-    body { margin:0; font-family:sans-serif; background:#1e1e1e; color:white; }
-    .screen { display:none; padding:20px; }
-    .active { display:block; }
-    input, button { padding:10px; margin:5px 0; font-size:16px; }
-    button { cursor:pointer; }
-    #board { display:grid; grid-template-columns: repeat(10,40px); grid-template-rows: repeat(10,40px); gap:2px; margin-top:10px; }
-    .cell { width:40px; height:40px; background:#444; display:flex; align-items:center; justify-content:center; font-size:22px; }
-    .player { font-weight:bold; }
-    .smuggler { color:gold; font-weight:bold; }
-  </style>
+<style>
+body { margin:0; font-family:sans-serif; background:#1e1e1e; color:white; }
+.screen { display:none; padding:20px; }
+.active { display:block; }
+input, button { padding:10px; margin:5px 0; font-size:16px; }
+button { cursor:pointer; }
+#board { display:grid; grid-template-columns: repeat(10,40px); grid-template-rows: repeat(10,40px); gap:2px; margin-top:10px; }
+.cell { width:40px; height:40px; background:#444; display:flex; align-items:center; justify-content:center; font-size:22px; }
+.player { font-weight:bold; }
+.smuggler { color:gold; font-weight:bold; }
+</style>
 </head>
 <body>
 
@@ -87,20 +87,22 @@ window.addEventListener('DOMContentLoaded', () => {
       });
   };
 
-  let currentLobbyId=null,currentPlayerId=null,boardState={players:[],smugglers:[]},nickname='';
+  let currentLobbyId=sessionStorage.getItem('currentLobbyId')||null;
+  let currentPlayerId=null;
+  let boardState={players:[],smugglers:[]};
+  let nickname='';
   const playerColors=['white','red','green','blue'];
+  const startPositions = [{x:0,y:0},{x:9,y:0},{x:0,y:9},{x:9,y:9}];
+
   const createBtn=document.getElementById('createLobby');
   const joinBtn=document.getElementById('joinLobby');
   const restartBtn=document.getElementById('restartBtn');
-  const startPositions = [{x:0,y:0},{x:9,y:0},{x:0,y:9},{x:9,y:9}];
 
   auth.onAuthStateChanged(user => {
     if(user){
-      document.getElementById('currentUserInfo').innerText = `Ingelogd als: ${user.email}`;
       currentPlayerId=user.uid;
-      const storedLobby = sessionStorage.getItem('currentLobbyId');
-      if(storedLobby){
-        currentLobbyId=storedLobby;
+      document.getElementById('currentUserInfo').innerText = `Ingelogd als: ${user.email}`;
+      if(currentLobbyId){
         listenToLobby(currentLobbyId);
       } else show('lobby');
     } else show('login');
@@ -124,13 +126,7 @@ window.addEventListener('DOMContentLoaded', () => {
       const {color,pos} = await assignColorAndPosition(lobbyRef);
       await lobbyRef.collection('players').doc(currentPlayerId).set({id:currentPlayerId,nickname,x:pos.x,y:pos.y,score:0,color});
 
-      // Plaats 3 smokkelaars
-      for(let i=0;i<3;i++){
-        let x=Math.floor(Math.random()*10);
-        let y=Math.floor(Math.random()*10);
-        await lobbyRef.collection('smugglers').doc(`${x}_${y}`).set({x,y});
-      }
-
+      await createSmugglers(lobbyRef);
       alert(`Lobby aangemaakt! Code: ${currentLobbyId}`);
       listenToLobby(currentLobbyId);
     } catch(err){ console.error(err); alert('Fout bij lobby maken: '+err.message); }
@@ -150,14 +146,13 @@ window.addEventListener('DOMContentLoaded', () => {
 
       const {color,pos} = await assignColorAndPosition(lobbyRef);
       await lobbyRef.collection('players').doc(currentPlayerId).set({id:currentPlayerId,nickname,x:pos.x,y:pos.y,score:0,color});
-
-      alert(`Je bent joined in lobby: ${code}`);
       listenToLobby(code);
     } catch(err){ console.error(err); alert('Fout bij joinen: '+err.message); }
   };
 
   restartBtn.onclick=async()=>{
     if(!currentLobbyId) return alert('Geen actieve lobby');
+    console.log('Herstart knop gedrukt, currentLobbyId =', currentLobbyId);
     const lobbyRef = db.collection('lobbies').doc(currentLobbyId);
 
     const playersSnap = await lobbyRef.collection('players').get();
@@ -178,20 +173,24 @@ window.addEventListener('DOMContentLoaded', () => {
     const smugSnap = await lobbyRef.collection('smugglers').get();
     smugSnap.forEach(doc => batch.delete(doc.ref));
 
-    // Voeg 3 nieuwe smokkelaars toe, niet op spelers
+    await batch.commit();
+    console.log('Spelers gereset, nu smokkelaars toevoegen');
+
+    await createSmugglers(lobbyRef, usedPositions);
+    alert('Spel opnieuw gestart! Posities, kleuren en smokkelaars zijn gereset.');
+  };
+
+  async function createSmugglers(lobbyRef, usedPositions=[]) {
     let j = 0;
     while (j < 3) {
       let x = Math.floor(Math.random()*10);
       let y = Math.floor(Math.random()*10);
       if (!usedPositions.find(p => p.x === x && p.y === y)) {
-        batch.set(lobbyRef.collection('smugglers').doc(`${x}_${y}`), { x, y });
+        await lobbyRef.collection('smugglers').doc(`${x}_${y}`).set({ x, y });
         j++;
       }
     }
-
-    await batch.commit();
-    alert('Spel opnieuw gestart! Posities, kleuren en smokkelaars zijn gereset.');
-  };
+  }
 
   function listenToLobby(lobbyId){
     show('game');
@@ -251,5 +250,6 @@ window.addEventListener('DOMContentLoaded', () => {
   function getDeltaY(a,b){ const coords={1:[0,0],2:[1,0],3:[2,0],4:[0,1],5:[1,1],6:[2,1],7:[0,2],8:[1,2],9:[2,2]}; return coords[b][1]-coords[a][1]; }
 });
 </script>
+
 </body>
 </html>
