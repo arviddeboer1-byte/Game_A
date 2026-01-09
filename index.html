@@ -17,12 +17,12 @@ body { margin:0; font-family:sans-serif; background:#1e1e1e; color:white; }
 input, button { padding:10px; margin:5px 0; font-size:16px; }
 button { cursor:pointer; }
 #board { display:grid; grid-template-columns: repeat(10,40px); grid-template-rows: repeat(10,40px); gap:2px; margin-top:10px; }
-.cell { width:40px; height:40px; background:#444; display:flex; align-items:center; justify-content:center; font-size:22px; position:relative; }
-.player { font-weight:bold; transition: all 0.25s ease; }
-.player.me { text-shadow: 0 0 8px #0f0; }
-.player.move { transform: scale(1.3); }
+.cell { width:40px; height:40px; background:#444; display:flex; align-items:center; justify-content:center; font-size:22px; flex-direction:column; position:relative; }
+.player { font-weight:bold; }
 .smuggler { color:gold; font-weight:bold; }
-.score-label { position:absolute; top:-18px; font-size:12px; text-align:center; width:100%; pointer-events:none; }
+.playerName { position:absolute; bottom:0; font-size:12px; color:white; }
+#miniGrid { display:grid; grid-template-columns:repeat(3,40px); grid-gap:2px; width:126px; margin-top:5px; }
+#miniGrid div { background:#666; color:white; display:flex; align-items:center; justify-content:center; cursor:pointer; font-weight:bold; height:40px; user-select:none; }
 </style>
 </head>
 <body>
@@ -49,11 +49,10 @@ button { cursor:pointer; }
   <div id="gameInfo" style="margin-bottom:10px;"></div>
   <button id="restartBtn">Herstart</button>
   <div id="board"></div>
+
   <div style="margin-top:10px;">
-    <p>Paardensprong invoer (1-9 mini-raster):</p>
-    <input id="step1" placeholder="Eerste getal" size="1" /> →
-    <input id="step2" placeholder="Tweede getal" size="1" />
-    <button id="moveBtn">Spring</button>
+    <p>Paardensprong (klik twee getallen van 1-9):</p>
+    <div id="miniGrid"></div>
   </div>
 </div>
 
@@ -156,7 +155,6 @@ window.addEventListener('DOMContentLoaded', () => {
   restartBtn.onclick=async()=>{
     if(!currentLobbyId) return alert('Geen actieve lobby');
     const lobbyRef = db.collection('lobbies').doc(currentLobbyId);
-
     const playersSnap = await lobbyRef.collection('players').get();
     const batch = db.batch();
 
@@ -175,16 +173,15 @@ window.addEventListener('DOMContentLoaded', () => {
 
     await batch.commit();
     await createSmugglers(lobbyRef, usedPositions);
-    alert('Spel opnieuw gestart! Posities, kleuren en smokkelaars zijn gereset.');
   };
 
-  async function createSmugglers(lobbyRef, usedPositions=[]) {
+  async function createSmugglers(lobbyRef, usedPositions=[]){
     let j = 0;
-    while (j < 3) {
-      let x = Math.floor(Math.random()*10);
-      let y = Math.floor(Math.random()*10);
-      if (!usedPositions.find(p => p.x === x && p.y === y)) {
-        await lobbyRef.collection('smugglers').doc(`${x}_${y}`).set({ x, y });
+    while(j<3){
+      let x=Math.floor(Math.random()*10);
+      let y=Math.floor(Math.random()*10);
+      if(!usedPositions.find(p=>p.x===x && p.y===y)){
+        await lobbyRef.collection('smugglers').doc(`${x}_${y}`).set({x,y});
         j++;
       }
     }
@@ -212,44 +209,19 @@ window.addEventListener('DOMContentLoaded', () => {
   }
 
   function renderBoard(players,smugglers){
-    const board=document.getElementById('board'); 
-    board.innerHTML='';
-    players.forEach(p=>{ if(!p.lastPos)p.lastPos={x:p.x,y:p.y}; });
-
+    const board=document.getElementById('board'); board.innerHTML='';
     for(let y=0;y<10;y++){
       for(let x=0;x<10;x++){
-        const cell=document.createElement('div'); 
-        cell.className='cell';
-
-        const playerHere = players.find(p=>p.x===x && p.y===y);
+        const cell=document.createElement('div'); cell.className='cell';
+        const playerHere=players.find(p=>p.x===x && p.y===y);
         if(playerHere){
-          const nameDiv = document.createElement('div');
-          nameDiv.className='score-label';
-          nameDiv.innerHTML = `${playerHere.nickname} (${playerHere.score})`; 
-          cell.appendChild(nameDiv);
-
-          const span=document.createElement('span'); 
-          span.className='player'; 
-          span.textContent='♞'; 
-          span.style.color=playerHere.color;
-          if(playerHere.id===currentPlayerId) span.classList.add('me');
-
-          if(playerHere.lastPos.x!==playerHere.x||playerHere.lastPos.y!==playerHere.y){
-            span.classList.add('move');
-            setTimeout(()=>span.classList.remove('move'),250);
-          }
-          playerHere.lastPos={x:playerHere.x,y:playerHere.y};
+          const span=document.createElement('span'); span.className='player'; span.style.color=playerHere.color; span.textContent='♞'; 
+          const nameDiv=document.createElement('div'); nameDiv.className='playerName'; nameDiv.textContent=playerHere.nickname+' ('+playerHere.score+')';
+          cell.appendChild(span); cell.appendChild(nameDiv);
+        } else if(smugglers.find(s=>s.x===x && s.y===y)){
+          const span=document.createElement('span'); span.className='smuggler'; span.textContent='♟'; 
           cell.appendChild(span);
         }
-
-        const smugHere = smugglers.find(s=>s.x===x && s.y===y);
-        if(smugHere){
-          const s=document.createElement('span');
-          s.className='smuggler';
-          s.textContent='♟';
-          cell.appendChild(s);
-        }
-
         board.appendChild(cell);
       }
     }
@@ -261,29 +233,59 @@ window.addEventListener('DOMContentLoaded', () => {
     infoDiv.innerHTML=`<strong>Lobby:</strong> ${currentLobbyId} <br><strong>Jij:</strong> ${me?me.nickname:'Onbekend'} <br><strong>Spelers:</strong> ${players.map(p=>p.nickname).join(', ')}`;
   }
 
-  const moveBtn=document.getElementById('moveBtn');
-  moveBtn.onclick=async()=>{
-    const a=parseInt(document.getElementById('step1').value);
-    const b=parseInt(document.getElementById('step2').value);
-    if(!a||!b||a<1||a>9||b<1||b>9) return alert('Voer getallen 1-9 in');
-    const dx=getDeltaX(a,b); 
+  const miniGrid = document.getElementById('miniGrid');
+  let firstClick=null;
+
+  function createMiniGrid(){
+    miniGrid.innerHTML='';
+    for(let i=1;i<=9;i++){
+      const cell = document.createElement('div');
+      cell.textContent = i;
+      cell.addEventListener('click',()=>handleMiniGridClick(i));
+      miniGrid.appendChild(cell);
+    }
+  }
+
+  function handleMiniGridClick(num){
+    if(firstClick===null){
+      firstClick=num;
+      highlightCell(num,true);
+    } else {
+      const secondClick=num;
+      highlightCell(num,true);
+      performJump(firstClick,secondClick);
+      setTimeout(()=>highlightCell(firstClick,false),300);
+      setTimeout(()=>highlightCell(secondClick,false),300);
+      firstClick=null;
+    }
+  }
+
+  function highlightCell(num,on){
+    const cells = miniGrid.children;
+    cells[num-1].style.background = on ? '#0f0' : '#666';
+  }
+
+  async function performJump(a,b){
+    const dx=getDeltaX(a,b);
     const dy=getDeltaY(a,b);
-    let player=boardState.players.find(p=>p.id===currentPlayerId); 
+    let player=boardState.players.find(p=>p.id===currentPlayerId);
     if(!player) return;
-    let newX=Math.max(0,Math.min(9,player.x+dx)); 
+    let newX=Math.max(0,Math.min(9,player.x+dx));
     let newY=Math.max(0,Math.min(9,player.y+dy));
     const playerRef=db.collection('lobbies').doc(currentLobbyId).collection('players').doc(currentPlayerId);
     const smug=boardState.smugglers.find(s=>s.x===newX && s.y===newY);
-    if(smug){ 
-      await db.collection('lobbies').doc(currentLobbyId).collection('smugglers').doc(`${smug.x}_${smug.y}`).delete(); 
-      player.score+=1; 
-      alert('Je hebt een smokkelaar gevangen! Score: '+player.score); 
+    if(smug){
+      await db.collection('lobbies').doc(currentLobbyId).collection('smugglers').doc(`${smug.x}_${smug.y}`).delete();
+      player.score+=1;
+      alert('Je hebt een smokkelaar gevangen! Score: '+player.score);
     }
     await playerRef.update({x:newX,y:newY,score:player.score});
-  };
+  }
 
   function getDeltaX(a,b){ const coords={1:[0,0],2:[1,0],3:[2,0],4:[0,1],5:[1,1],6:[2,1],7:[0,2],8:[1,2],9:[2,2]}; return coords[b][0]-coords[a][0]; }
   function getDeltaY(a,b){ const coords={1:[0,0],2:[1,0],3:[2,0],4:[0,1],5:[1,1],6:[2,1],7:[0,2],8:[1,2],9:[2,2]}; return coords[b][1]-coords[a][1]; }
+
+  createMiniGrid();
 });
 </script>
 
