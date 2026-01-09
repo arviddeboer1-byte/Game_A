@@ -1,216 +1,254 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
-  <meta charset="UTF-8" />
-  <title>Paardensprong – Realtime Multiplayer</title>
-  <style>
-    body {
-      background: #111;
-      color: #eee;
-      font-family: Arial, sans-serif;
-      text-align: center;
-    }
-    #top {
-      margin: 10px;
-    }
-    canvas {
-      background: #222;
-      border: 2px solid #555;
-    }
-    button {
-      margin: 5px;
-      padding: 6px 12px;
-      font-size: 14px;
-    }
-  </style>
+<meta charset="UTF-8" />
+<title>Paardenspel – Multiplayer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+
+<!-- Firebase compat SDKs -->
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+
+<style>
+body { margin:0; font-family:sans-serif; background:#1e1e1e; color:white; }
+.screen { display:none; padding:20px; }
+.active { display:block; }
+input, button { padding:10px; margin:5px 0; font-size:16px; }
+button { cursor:pointer; }
+#board { display:grid; grid-template-columns: repeat(10,40px); grid-template-rows: repeat(10,40px); gap:2px; margin-top:10px; }
+.cell { width:40px; height:40px; background:#444; display:flex; align-items:center; justify-content:center; font-size:22px; }
+.player { font-weight:bold; }
+.smuggler { color:gold; font-weight:bold; }
+</style>
 </head>
 <body>
 
-<h2>Paardensprong – Realtime Multiplayer</h2>
-
-<div id="top">
-  <div>
-    Ingelogd als: <strong id="me">–</strong> |
-    Lobby: <strong id="lobby">–</strong>
-  </div>
-  <button id="restart">(Her)start</button>
+<div id="loginScreen" class="screen active">
+  <h2>Login</h2>
+  <input id="email" type="email" placeholder="E-mail" />
+  <input id="password" type="password" placeholder="Wachtwoord" />
+  <button id="loginBtn">Inloggen / Registreren</button>
 </div>
 
-<canvas id="game" width="600" height="600"></canvas>
+<div id="lobbyScreen" class="screen">
+  <h2>Lobby</h2>
+  <div id="currentUserInfo" style="margin-bottom:10px;"></div>
+  <input id="nickname" placeholder="Nickname" />
+  <button id="createLobby">Maak lobby</button>
+  <hr>
+  <input id="lobbyCode" placeholder="Lobby code" />
+  <button id="joinLobby">Join lobby</button>
+</div>
 
-<script type="module">
-import { initializeApp } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-app.js";
-import { getAuth, onAuthStateChanged } from "https://www.gstatic.com/firebasejs/9.23.0/firebase-auth.js";
-import {
-  getFirestore, doc, onSnapshot, updateDoc, serverTimestamp
-} from "https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore.js";
+<div id="gameScreen" class="screen">
+  <h2 id="gameTitle"></h2>
+  <div id="gameInfo" style="margin-bottom:10px;"></div>
+  <button id="restartBtn">Herstart</button>
+  <div id="board"></div>
+  <div style="margin-top:10px;">
+    <p>Paardensprong invoer (1-9 mini-raster):</p>
+    <input id="step1" placeholder="Eerste getal" size="1" /> →
+    <input id="step2" placeholder="Tweede getal" size="1" />
+    <button id="moveBtn">Spring</button>
+  </div>
+</div>
 
-/* 🔧 Firebase config (jouw project) */
-const firebaseConfig = {
-  apiKey: "AIzaSyA8LmWdVyebJSYLmKOseg8UFxZege5buMg",
-  authDomain: "paardensprong-game.firebaseapp.com",
-  projectId: "paardensprong-game"
-};
+<script>
+window.addEventListener('DOMContentLoaded', () => {
+  const firebaseConfig = {
+    apiKey: "AIzaSyA8LmWdVyebJSYLmKOseg8UFxZege5buMg",
+    authDomain: "paardensprong-game.firebaseapp.com",
+    projectId: "paardensprong-game",
+    storageBucket: "paardensprong-game.appspot.com",
+    messagingSenderId: "815440447520",
+    appId: "1:815440447520:web:72569450503b4e77b85445",
+    measurementId: "G-2CEG2V76FJ"
+  };
 
-const app = initializeApp(firebaseConfig);
-const auth = getAuth(app);
-const db = getFirestore(app);
+  firebase.initializeApp(firebaseConfig);
+  const auth = firebase.auth();
+  const db = firebase.firestore();
 
-/* 🎨 Canvas setup */
-const canvas = document.getElementById("game");
-const ctx = canvas.getContext("2d");
-const GRID = 10;
-const CELL = canvas.width / GRID;
+  const screens = { login: document.getElementById('loginScreen'), lobby: document.getElementById('lobbyScreen'), game: document.getElementById('gameScreen') };
+  function show(screen){ Object.values(screens).forEach(s => s.classList.remove('active')); screens[screen].classList.add('active'); }
 
-/* 🧠 State */
-let myUid = null;
-let lobbyId = localStorage.getItem("lobbyId");
-let state = null;
-let animCache = {};
+  const loginBtn = document.getElementById('loginBtn');
+  loginBtn.onclick = () => {
+    const email = document.getElementById('email').value;
+    const password = document.getElementById('password').value;
+    if(!email||!password) return alert('Vul e-mail en wachtwoord in');
+    auth.signInWithEmailAndPassword(email,password)
+      .then(()=>console.log('Ingelogd'))
+      .catch(()=>{
+        auth.createUserWithEmailAndPassword(email,password)
+          .then(()=>console.log('Account aangemaakt en ingelogd'))
+          .catch(err=>alert('Fout bij aanmaken account: '+err.message));
+      });
+  };
 
-/* 🔐 Auth */
-onAuthStateChanged(auth, user => {
-  if (!user) return;
-  myUid = user.uid;
-  document.getElementById("me").innerText = user.email;
-  document.getElementById("lobby").innerText = lobbyId || "(geen)";
+  let currentLobbyId=sessionStorage.getItem('currentLobbyId')||null;
+  let currentPlayerId=null;
+  let boardState={players:[],smugglers:[]};
+  let nickname='';
+  const playerColors=['white','red','green','blue'];
+  const startPositions = [{x:0,y:0},{x:9,y:0},{x:0,y:9},{x:9,y:9}];
 
-  if (!lobbyId) {
-    alert("Geen lobbyId gevonden in localStorage");
-    return;
+  const createBtn=document.getElementById('createLobby');
+  const joinBtn=document.getElementById('joinLobby');
+  const restartBtn=document.getElementById('restartBtn');
+
+  auth.onAuthStateChanged(user => {
+    if(user){
+      currentPlayerId=user.uid;
+      document.getElementById('currentUserInfo').innerText = `Ingelogd als: ${user.email}`;
+      if(currentLobbyId){
+        listenToLobby(currentLobbyId);
+      } else show('lobby');
+    } else show('login');
+  });
+
+  async function assignColorAndPosition(lobbyRef){
+    const snap = await lobbyRef.collection('players').get();
+    const index = snap.size % playerColors.length;
+    return { color: playerColors[index], pos: startPositions[index] };
   }
 
-  const ref = doc(db, "lobbies", lobbyId);
-  onSnapshot(ref, snap => {
-    if (!snap.exists()) return;
-    const newState = snap.data();
-    handleAnimations(state, newState);
-    state = newState;
-  });
+  createBtn.onclick=async()=>{
+    try{
+      nickname=document.getElementById('nickname').value.trim();
+      if(!nickname) return alert('Vul je nickname in');
+      const lobbyRef=db.collection('lobbies').doc();
+      currentLobbyId=lobbyRef.id;
+      sessionStorage.setItem('currentLobbyId',currentLobbyId);
+      await lobbyRef.set({host:currentPlayerId,createdAt:firebase.firestore.FieldValue.serverTimestamp(),status:'waiting'});
+
+      const {color,pos} = await assignColorAndPosition(lobbyRef);
+      await lobbyRef.collection('players').doc(currentPlayerId).set({id:currentPlayerId,nickname,x:pos.x,y:pos.y,score:0,color});
+
+      await createSmugglers(lobbyRef);
+      alert(`Lobby aangemaakt! Code: ${currentLobbyId}`);
+      listenToLobby(currentLobbyId);
+    } catch(err){ console.error(err); alert('Fout bij lobby maken: '+err.message); }
+  };
+
+  joinBtn.onclick=async()=>{
+    try{
+      nickname=document.getElementById('nickname').value.trim();
+      const code=document.getElementById('lobbyCode').value.trim();
+      if(!nickname||!code) return alert('Vul nickname en lobby code in');
+      const lobbyRef=db.collection('lobbies').doc(code);
+      const lobbySnap=await lobbyRef.get();
+      if(!lobbySnap.exists) return alert('Lobby niet gevonden');
+
+      currentLobbyId=code;
+      sessionStorage.setItem('currentLobbyId',currentLobbyId);
+
+      const {color,pos} = await assignColorAndPosition(lobbyRef);
+      await lobbyRef.collection('players').doc(currentPlayerId).set({id:currentPlayerId,nickname,x:pos.x,y:pos.y,score:0,color});
+      listenToLobby(code);
+    } catch(err){ console.error(err); alert('Fout bij joinen: '+err.message); }
+  };
+
+  restartBtn.onclick=async()=>{
+    if(!currentLobbyId) return alert('Geen actieve lobby');
+    console.log('Herstart knop gedrukt, currentLobbyId =', currentLobbyId);
+    const lobbyRef = db.collection('lobbies').doc(currentLobbyId);
+
+    const playersSnap = await lobbyRef.collection('players').get();
+    const batch = db.batch();
+
+    // Reset spelers met correcte kleuren en startposities
+    let i = 0;
+    const usedPositions = [];
+    playersSnap.forEach(doc => {
+      const pos = startPositions[i % startPositions.length];
+      const color = playerColors[i % playerColors.length];
+      usedPositions.push(pos);
+      batch.update(doc.ref, { x: pos.x, y: pos.y, color, score: 0 });
+      i++;
+    });
+
+    // Verwijder oude smokkelaars
+    const smugSnap = await lobbyRef.collection('smugglers').get();
+    smugSnap.forEach(doc => batch.delete(doc.ref));
+
+    await batch.commit();
+    console.log('Spelers gereset, nu smokkelaars toevoegen');
+
+    await createSmugglers(lobbyRef, usedPositions);
+    alert('Spel opnieuw gestart! Posities, kleuren en smokkelaars zijn gereset.');
+  };
+
+  async function createSmugglers(lobbyRef, usedPositions=[]) {
+    let j = 0;
+    while (j < 3) {
+      let x = Math.floor(Math.random()*10);
+      let y = Math.floor(Math.random()*10);
+      if (!usedPositions.find(p => p.x === x && p.y === y)) {
+        await lobbyRef.collection('smugglers').doc(`${x}_${y}`).set({ x, y });
+        j++;
+      }
+    }
+  }
+
+  function listenToLobby(lobbyId){
+    show('game');
+    const playersRef=db.collection('lobbies').doc(lobbyId).collection('players');
+    const smugglersRef=db.collection('lobbies').doc(lobbyId).collection('smugglers');
+
+    playersRef.onSnapshot(snapshot=>{
+      const players=[];
+      snapshot.forEach(doc=>players.push(doc.data()));
+      boardState.players = players;
+      renderBoard(boardState.players, boardState.smugglers);
+      updateGameInfo(players);
+    });
+
+    smugglersRef.onSnapshot(snapshot=>{
+      const smugglers=[];
+      snapshot.forEach(doc=>smugglers.push(doc.data()));
+      boardState.smugglers = smugglers;
+      renderBoard(boardState.players, boardState.smugglers);
+    });
+  }
+
+  function renderBoard(players,smugglers){
+    const board=document.getElementById('board'); board.innerHTML='';
+    for(let y=0;y<10;y++){
+      for(let x=0;x<10;x++){
+        const cell=document.createElement('div'); cell.className='cell';
+        const playerHere=players.find(p=>p.x===x && p.y===y);
+        if(playerHere){ const span=document.createElement('span'); span.className='player'; span.style.color=playerHere.color; span.textContent='♞'; cell.appendChild(span); }
+        else if(smugglers.find(s=>s.x===x && s.y===y)){ const span=document.createElement('span'); span.className='smuggler'; span.textContent='♟'; cell.appendChild(span); }
+        board.appendChild(cell);
+      }
+    }
+  }
+
+  function updateGameInfo(players){
+    const me=players.find(p=>p.id===currentPlayerId);
+    const infoDiv=document.getElementById('gameInfo');
+    infoDiv.innerHTML=`<strong>Lobby:</strong> ${currentLobbyId} <br><strong>Jij:</strong> ${me?me.nickname:'Onbekend'} <br><strong>Spelers:</strong> ${players.map(p=>p.nickname).join(', ')}`;
+  }
+
+  const moveBtn=document.getElementById('moveBtn');
+  moveBtn.onclick=async()=>{
+    const a=parseInt(document.getElementById('step1').value);
+    const b=parseInt(document.getElementById('step2').value);
+    if(!a||!b||a<1||a>9||b<1||b>9) return alert('Voer getallen 1-9 in');
+    const dx=getDeltaX(a,b); const dy=getDeltaY(a,b);
+    let player=boardState.players.find(p=>p.id===currentPlayerId); if(!player) return;
+    let newX=Math.max(0,Math.min(9,player.x+dx)); let newY=Math.max(0,Math.min(9,player.y+dy));
+    const playerRef=db.collection('lobbies').doc(currentLobbyId).collection('players').doc(currentPlayerId);
+    const smug=boardState.smugglers.find(s=>s.x===newX && s.y===newY);
+    if(smug){ await db.collection('lobbies').doc(currentLobbyId).collection('smugglers').doc(`${smug.x}_${smug.y}`).delete(); player.score+=1; alert('Je hebt een smokkelaar gevangen! Score: '+player.score); }
+    await playerRef.update({x:newX,y:newY,score:player.score});
+  };
+
+  function getDeltaX(a,b){ const coords={1:[0,0],2:[1,0],3:[2,0],4:[0,1],5:[1,1],6:[2,1],7:[0,2],8:[1,2],9:[2,2]}; return coords[b][0]-coords[a][0]; }
+  function getDeltaY(a,b){ const coords={1:[0,0],2:[1,0],3:[2,0],4:[0,1],5:[1,1],6:[2,1],7:[0,2],8:[1,2],9:[2,2]}; return coords[b][1]-coords[a][1]; }
 });
-
-/* 🎞️ Animaties bij state-wijziging */
-function handleAnimations(oldS, newS) {
-  if (!oldS) return;
-  for (const uid in newS.players) {
-    const p = newS.players[uid];
-    const o = oldS.players[uid];
-    if (o && (p.x !== o.x || p.y !== o.y)) {
-      animCache[uid] = {
-        fromX: o.x, fromY: o.y,
-        toX: p.x, toY: p.y,
-        start: performance.now()
-      };
-    }
-  }
-}
-
-/* 🖌️ Render */
-function draw() {
-  ctx.clearRect(0, 0, canvas.width, canvas.height);
-
-  // grid
-  ctx.strokeStyle = "#444";
-  for (let i = 0; i <= GRID; i++) {
-    ctx.beginPath();
-    ctx.moveTo(i * CELL, 0);
-    ctx.lineTo(i * CELL, canvas.height);
-    ctx.stroke();
-    ctx.beginPath();
-    ctx.moveTo(0, i * CELL);
-    ctx.lineTo(canvas.width, i * CELL);
-    ctx.stroke();
-  }
-
-  if (!state) return;
-
-  // smugglers
-  state.smugglers.forEach(s => {
-    ctx.font = "28px serif";
-    ctx.fillStyle = "orange";
-    ctx.fillText("♟", s.x * CELL + CELL / 4, s.y * CELL + CELL * 0.75);
-  });
-
-  // players
-  for (const uid in state.players) {
-    drawPlayer(uid, state.players[uid]);
-  }
-}
-
-function drawPlayer(uid, p) {
-  let px = p.x * CELL + CELL / 2;
-  let py = p.y * CELL + CELL / 2;
-
-  const anim = animCache[uid];
-  if (anim) {
-    const t = (performance.now() - anim.start) / 300;
-    if (t < 1) {
-      px = (anim.fromX + (anim.toX - anim.fromX) * t) * CELL + CELL / 2;
-      py = (anim.fromY + (anim.toY - anim.fromY) * t) * CELL + CELL / 2;
-    } else {
-      delete animCache[uid];
-    }
-  }
-
-  // glow eigen speler
-  if (uid === myUid) {
-    ctx.beginPath();
-    ctx.arc(px, py, CELL * 0.45, 0, Math.PI * 2);
-    ctx.fillStyle = "rgba(0,255,0,0.25)";
-    ctx.fill();
-  }
-
-  // piece
-  ctx.font = "32px serif";
-  ctx.fillStyle = p.color;
-  ctx.fillText("♞", px - 16, py + 12);
-
-  // name + score
-  ctx.font = "12px Arial";
-  ctx.fillStyle = "#fff";
-  ctx.fillText(`${p.name} (${p.score})`, px - 28, py - 22);
-}
-
-/* 🔁 Herstart */
-document.getElementById("restart").onclick = async () => {
-  if (!state || !lobbyId) return;
-
-  const colors = ["white", "black", "red", "green"];
-  const starts = [[0,0],[9,0],[9,9],[0,9]];
-
-  const players = {};
-  Object.entries(state.players).forEach(([uid,p], i) => {
-    players[uid] = {
-      ...p,
-      x: starts[i][0],
-      y: starts[i][1],
-      color: colors[i],
-      score: 0
-    };
-  });
-
-  const smugglers = [];
-  while (smugglers.length < 3) {
-    const x = Math.floor(Math.random() * 10);
-    const y = Math.floor(Math.random() * 10);
-    if (!starts.some(s => s[0] === x && s[1] === y)) {
-      smugglers.push({ x, y });
-    }
-  }
-
-  await updateDoc(doc(db, "lobbies", lobbyId), {
-    players,
-    smugglers,
-    updated: serverTimestamp()
-  });
-};
-
-/* 🔄 Loop */
-function loop() {
-  draw();
-  requestAnimationFrame(loop);
-}
-loop();
 </script>
 
 </body>
