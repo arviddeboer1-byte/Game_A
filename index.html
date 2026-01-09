@@ -18,8 +18,9 @@ input, button { padding:10px; margin:5px 0; font-size:16px; }
 button { cursor:pointer; }
 #board { display:grid; grid-template-columns: repeat(10,40px); grid-template-rows: repeat(10,40px); gap:2px; margin-top:10px; }
 .cell { width:40px; height:40px; background:#444; display:flex; align-items:center; justify-content:center; font-size:22px; position:relative; }
-.player { font-weight:bold; transition: transform 0.2s; }
+.player { font-weight:bold; display:flex; flex-direction:column; align-items:center; justify-content:center; transition: transform 0.2s; }
 .player.glow { box-shadow: 0 0 10px 3px lime; border-radius:50%; }
+.player span.name { font-size:10px; display:block; text-align:center; margin-top:2px; }
 .smuggler { color:gold; font-weight:bold; }
 #miniRaster { display:grid; grid-template-columns: repeat(3,40px); grid-template-rows: repeat(3,40px); gap:2px; margin-top:10px; }
 #miniRaster .cell { cursor:pointer; display:flex; align-items:center; justify-content:center; background:#333; color:white; font-weight:bold; }
@@ -44,12 +45,16 @@ button { cursor:pointer; }
   <hr>
   <input id="lobbyCode" placeholder="Lobby code" />
   <button id="joinLobby">Join lobby</button>
+  <hr>
+  <button id="logoutBtnLobby">Uitloggen</button>
 </div>
 
 <div id="gameScreen" class="screen">
   <h2 id="gameTitle"></h2>
   <div id="gameInfo" style="margin-bottom:10px;"></div>
   <button id="restartBtn">Herstart</button>
+  <button id="leaveLobbyBtn">Verlaat lobby</button>
+  <button id="logoutBtnGame">Uitloggen</button>
   <div id="board"></div>
   <div>
     <p>Mini-raster (klik op 1 vlak per beurt, start op 5):</p>
@@ -76,7 +81,21 @@ window.addEventListener('DOMContentLoaded', () => {
   const screens = { login: document.getElementById('loginScreen'), lobby: document.getElementById('lobbyScreen'), game: document.getElementById('gameScreen') };
   function show(screen){ Object.values(screens).forEach(s => s.classList.remove('active')); screens[screen].classList.add('active'); }
 
+  let currentLobbyId=sessionStorage.getItem('currentLobbyId')||null;
+  let currentPlayerId=null;
+  let boardState={players:[],smugglers:[]};
+  let nickname='';
+  const playerColors=['white','red','green','blue'];
+  const startPositions = [{x:0,y:0},{x:9,y:0},{x:0,y:9},{x:9,y:9}];
+
   const loginBtn = document.getElementById('loginBtn');
+  const createBtn=document.getElementById('createLobby');
+  const joinBtn=document.getElementById('joinLobby');
+  const restartBtn=document.getElementById('restartBtn');
+  const leaveLobbyBtn=document.getElementById('leaveLobbyBtn');
+  const logoutBtnLobby=document.getElementById('logoutBtnLobby');
+  const logoutBtnGame=document.getElementById('logoutBtnGame');
+
   loginBtn.onclick = () => {
     const email = document.getElementById('email').value;
     const password = document.getElementById('password').value;
@@ -89,27 +108,6 @@ window.addEventListener('DOMContentLoaded', () => {
           .catch(err=>alert('Fout bij aanmaken account: '+err.message));
       });
   };
-
-  let currentLobbyId=sessionStorage.getItem('currentLobbyId')||null;
-  let currentPlayerId=null;
-  let boardState={players:[],smugglers:[]};
-  let nickname='';
-  const playerColors=['white','red','green','blue'];
-  const startPositions = [{x:0,y:0},{x:9,y:0},{x:0,y:9},{x:9,y:9}];
-
-  const createBtn=document.getElementById('createLobby');
-  const joinBtn=document.getElementById('joinLobby');
-  const restartBtn=document.getElementById('restartBtn');
-
-  auth.onAuthStateChanged(user => {
-    if(user){
-      currentPlayerId=user.uid;
-      document.getElementById('currentUserInfo').innerText = `Ingelogd als: ${user.email}`;
-      if(currentLobbyId){
-        listenToLobby(currentLobbyId);
-      } else show('lobby');
-    } else show('login');
-  });
 
   async function assignColorAndPosition(lobbyRef){
     const snap = await lobbyRef.collection('players').get();
@@ -176,6 +174,18 @@ window.addEventListener('DOMContentLoaded', () => {
     await createSmugglers(lobbyRef, usedPositions);
   };
 
+  leaveLobbyBtn.onclick = async () => {
+    if(!currentLobbyId) return;
+    const lobbyRef = db.collection('lobbies').doc(currentLobbyId);
+    await lobbyRef.collection('players').doc(currentPlayerId).delete();
+    currentLobbyId = null;
+    sessionStorage.removeItem('currentLobbyId');
+    show('lobby');
+  };
+
+  logoutBtnLobby.onclick = () => auth.signOut();
+  logoutBtnGame.onclick = () => auth.signOut();
+
   async function createSmugglers(lobbyRef, usedPositions=[]){
     let j=0;
     while(j<3){
@@ -187,6 +197,16 @@ window.addEventListener('DOMContentLoaded', () => {
       }
     }
   }
+
+  auth.onAuthStateChanged(user => {
+    if(user){
+      currentPlayerId=user.uid;
+      document.getElementById('currentUserInfo').innerText = `Ingelogd als: ${user.email}`;
+      if(currentLobbyId){
+        listenToLobby(currentLobbyId);
+      } else show('lobby');
+    } else show('login');
+  });
 
   function listenToLobby(lobbyId){
     show('game');
@@ -216,9 +236,9 @@ window.addEventListener('DOMContentLoaded', () => {
         const cell=document.createElement('div'); cell.className='cell';
         const playerHere=players.find(p=>p.x===x && p.y===y);
         if(playerHere){
-          const span=document.createElement('span'); span.className='player';
+          const span=document.createElement('div'); span.className='player';
           span.style.color=playerHere.color;
-          span.textContent='♞ '+playerHere.nickname+' ('+playerHere.score+')';
+          span.innerHTML='♞<span class="name">'+playerHere.nickname+' ('+playerHere.score+')</span>';
           if(playerHere.id===currentPlayerId) span.classList.add('glow');
           cell.appendChild(span);
         } else if(smugglers.find(s=>s.x===x && s.y===y)){
@@ -254,12 +274,10 @@ window.addEventListener('DOMContentLoaded', () => {
     }
   }
   function handleMiniClick(i){
-    if(i===cursorPos) return; // zelfde positie
-    // Check of sprong geldig is
+    if(i===cursorPos) return;
     const dx=coords[i][0]-coords[cursorPos][0];
     const dy=coords[i][1]-coords[cursorPos][1];
     if((Math.abs(dx)===2 && Math.abs(dy)===1)||(Math.abs(dx)===1 && Math.abs(dy)===2)){
-      // valide paardensprong
       movePlayer(dx,dy);
     }
     cursorPos=i;
