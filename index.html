@@ -17,12 +17,13 @@ body { margin:0; font-family:sans-serif; background:#1e1e1e; color:white; }
 input, button { padding:10px; margin:5px 0; font-size:16px; }
 button { cursor:pointer; }
 #board { display:grid; grid-template-columns: repeat(10,40px); grid-template-rows: repeat(10,40px); gap:2px; margin-top:10px; }
-.cell { width:40px; height:40px; background:#444; display:flex; align-items:center; justify-content:center; font-size:22px; flex-direction:column; position:relative; }
-.player { font-weight:bold; }
+.cell { width:40px; height:40px; background:#444; display:flex; align-items:center; justify-content:center; font-size:22px; flex-direction:column; position:relative; transition: background 0.2s; }
+.player { font-weight:bold; transition: transform 0.3s ease; }
 .smuggler { color:gold; font-weight:bold; }
 .playerName { position:absolute; bottom:0; font-size:12px; color:white; }
 #miniGrid { display:grid; grid-template-columns:repeat(3,40px); grid-gap:2px; width:126px; margin-top:5px; }
-#miniGrid div { background:#666; color:white; display:flex; align-items:center; justify-content:center; cursor:pointer; font-weight:bold; height:40px; user-select:none; }
+#miniGrid div { background:#666; color:white; display:flex; align-items:center; justify-content:center; cursor:pointer; font-weight:bold; height:40px; user-select:none; transition: background 0.2s; }
+.glow { box-shadow: 0 0 10px 3px lime; border-radius: 50%; }
 </style>
 </head>
 <body>
@@ -215,11 +216,13 @@ window.addEventListener('DOMContentLoaded', () => {
         const cell=document.createElement('div'); cell.className='cell';
         const playerHere=players.find(p=>p.x===x && p.y===y);
         if(playerHere){
-          const span=document.createElement('span'); span.className='player'; span.style.color=playerHere.color; span.textContent='♞'; 
+          const span=document.createElement('span'); span.className='player'; span.style.color=playerHere.color; span.textContent='♞';
+          // glow eigen speler
+          if(playerHere.id===currentPlayerId) span.classList.add('glow');
           const nameDiv=document.createElement('div'); nameDiv.className='playerName'; nameDiv.textContent=playerHere.nickname+' ('+playerHere.score+')';
           cell.appendChild(span); cell.appendChild(nameDiv);
         } else if(smugglers.find(s=>s.x===x && s.y===y)){
-          const span=document.createElement('span'); span.className='smuggler'; span.textContent='♟'; 
+          const span=document.createElement('span'); span.className='smuggler'; span.textContent='♟';
           cell.appendChild(span);
         }
         board.appendChild(cell);
@@ -273,6 +276,19 @@ window.addEventListener('DOMContentLoaded', () => {
     let newX=Math.max(0,Math.min(9,player.x+dx));
     let newY=Math.max(0,Math.min(9,player.y+dy));
     const playerRef=db.collection('lobbies').doc(currentLobbyId).collection('players').doc(currentPlayerId);
+
+    // Animate jump
+    const board=document.getElementById('board');
+    const oldCellIndex = player.y*10 + player.x;
+    const newCellIndex = newY*10 + newX;
+    const oldCell = board.children[oldCellIndex];
+    const newCell = board.children[newCellIndex];
+    const icon = oldCell.querySelector('.player');
+    if(icon){
+      icon.style.transform = `translate(${(newX-player.x)*42}px, ${(newY-player.y)*42}px)`;
+      setTimeout(()=>icon.style.transform='',300);
+    }
+
     const smug=boardState.smugglers.find(s=>s.x===newX && s.y===newY);
     if(smug){
       await db.collection('lobbies').doc(currentLobbyId).collection('smugglers').doc(`${smug.x}_${smug.y}`).delete();
