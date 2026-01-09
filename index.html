@@ -1,9 +1,9 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
-<meta charset="UTF-8" />
-<title>Paardenspel – Multiplayer (Cursor 5 Start)</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0" />
+<meta charset="UTF-8">
+<title>Paardenspel – Multiplayer</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <!-- Firebase compat SDKs -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -17,14 +17,14 @@ body { margin:0; font-family:sans-serif; background:#1e1e1e; color:white; }
 input, button { padding:10px; margin:5px 0; font-size:16px; }
 button { cursor:pointer; }
 #board { display:grid; grid-template-columns: repeat(10,40px); grid-template-rows: repeat(10,40px); gap:2px; margin-top:10px; }
-.cell { width:40px; height:40px; background:#444; display:flex; align-items:center; justify-content:center; font-size:22px; flex-direction:column; position:relative; transition: background 0.2s; }
-.player { font-weight:bold; transition: transform 0.3s ease; }
+.cell { width:40px; height:40px; background:#444; display:flex; align-items:center; justify-content:center; font-size:22px; position:relative; }
+.player { font-weight:bold; transition: transform 0.2s; }
+.player.glow { box-shadow: 0 0 10px 3px lime; border-radius:50%; }
 .smuggler { color:gold; font-weight:bold; }
-.playerName { position:absolute; bottom:0; font-size:12px; color:white; }
-#miniGrid { display:grid; grid-template-columns:repeat(3,40px); grid-gap:2px; width:126px; margin-top:5px; }
-#miniGrid div { background:#666; color:white; display:flex; align-items:center; justify-content:center; cursor:pointer; font-weight:bold; height:40px; user-select:none; transition: background 0.2s; }
-.cursor { background:#0f0; }
-.glow { box-shadow: 0 0 10px 3px lime; border-radius: 50%; }
+#miniRaster { display:grid; grid-template-columns: repeat(3,40px); grid-template-rows: repeat(3,40px); gap:2px; margin-top:10px; }
+#miniRaster .cell { cursor:pointer; display:flex; align-items:center; justify-content:center; background:#333; color:white; font-weight:bold; }
+#miniRaster .cell.active { background:green; }
+#miniRaster .cell.valid { background:lightblue; }
 </style>
 </head>
 <body>
@@ -51,10 +51,9 @@ button { cursor:pointer; }
   <div id="gameInfo" style="margin-bottom:10px;"></div>
   <button id="restartBtn">Herstart</button>
   <div id="board"></div>
-
-  <div style="margin-top:10px;">
-    <p>Paardensprong mini-raster (start cursor in 5): klik één vak per keer</p>
-    <div id="miniGrid"></div>
+  <div>
+    <p>Mini-raster (klik op 1 vlak per beurt, start op 5):</p>
+    <div id="miniRaster"></div>
   </div>
 </div>
 
@@ -157,9 +156,9 @@ window.addEventListener('DOMContentLoaded', () => {
   restartBtn.onclick=async()=>{
     if(!currentLobbyId) return alert('Geen actieve lobby');
     const lobbyRef = db.collection('lobbies').doc(currentLobbyId);
+
     const playersSnap = await lobbyRef.collection('players').get();
     const batch = db.batch();
-
     let i = 0;
     const usedPositions = [];
     playersSnap.forEach(doc => {
@@ -172,15 +171,13 @@ window.addEventListener('DOMContentLoaded', () => {
 
     const smugSnap = await lobbyRef.collection('smugglers').get();
     smugSnap.forEach(doc => batch.delete(doc.ref));
-
     await batch.commit();
+
     await createSmugglers(lobbyRef, usedPositions);
-    cursorPos = 5; // Reset mini-raster cursor
-    renderMiniGrid();
   };
 
   async function createSmugglers(lobbyRef, usedPositions=[]){
-    let j = 0;
+    let j=0;
     while(j<3){
       let x=Math.floor(Math.random()*10);
       let y=Math.floor(Math.random()*10);
@@ -219,12 +216,14 @@ window.addEventListener('DOMContentLoaded', () => {
         const cell=document.createElement('div'); cell.className='cell';
         const playerHere=players.find(p=>p.x===x && p.y===y);
         if(playerHere){
-          const span=document.createElement('span'); span.className='player'; span.style.color=playerHere.color; span.textContent='♞';
+          const span=document.createElement('span'); span.className='player';
+          span.style.color=playerHere.color;
+          span.textContent='♞ '+playerHere.nickname+' ('+playerHere.score+')';
           if(playerHere.id===currentPlayerId) span.classList.add('glow');
-          const nameDiv=document.createElement('div'); nameDiv.className='playerName'; nameDiv.textContent=playerHere.nickname+' ('+playerHere.score+')';
-          cell.appendChild(span); cell.appendChild(nameDiv);
+          cell.appendChild(span);
         } else if(smugglers.find(s=>s.x===x && s.y===y)){
-          const span=document.createElement('span'); span.className='smuggler'; span.textContent='♟';
+          const span=document.createElement('span'); span.className='smuggler';
+          span.textContent='♟';
           cell.appendChild(span);
         }
         board.appendChild(cell);
@@ -238,65 +237,52 @@ window.addEventListener('DOMContentLoaded', () => {
     infoDiv.innerHTML=`<strong>Lobby:</strong> ${currentLobbyId} <br><strong>Jij:</strong> ${me?me.nickname:'Onbekend'} <br><strong>Spelers:</strong> ${players.map(p=>p.nickname).join(', ')}`;
   }
 
-  // --- Mini-raster cursor logica ---
-  const miniGrid = document.getElementById('miniGrid');
-  let cursorPos = 5; // Start in het midden
-  renderMiniGrid();
-
-  function renderMiniGrid(){
-    miniGrid.innerHTML='';
+  // ---- Mini-raster logica ----
+  const miniRaster=document.getElementById('miniRaster');
+  let cursorPos=5; // start in midden
+  const coords={1:[0,0],2:[1,0],3:[2,0],4:[0,1],5:[1,1],6:[2,1],7:[0,2],8:[1,2],9:[2,2]};
+  function drawMiniRaster(){
+    miniRaster.innerHTML='';
     for(let i=1;i<=9;i++){
-      const cell = document.createElement('div');
+      const cell=document.createElement('div'); cell.className='cell';
       cell.textContent=i;
-      if(i===cursorPos) cell.classList.add('cursor');
-      cell.addEventListener('click',()=>handleMiniClick(i));
-      miniGrid.appendChild(cell);
+      if(i===cursorPos) cell.classList.add('active');
+      const validNext = getValidFromCursor(i);
+      if(validNext) cell.classList.add('valid');
+      cell.onclick=()=>{ handleMiniClick(i); };
+      miniRaster.appendChild(cell);
     }
   }
-
-  function handleMiniClick(newPos){
-    const oldPos = cursorPos;
-    const deltaX = getDeltaX(oldPos,newPos);
-    const deltaY = getDeltaY(oldPos,newPos);
-
-    // Check of dit een echte paardensprong is: (|dx|=2 & |dy|=1) of (|dx|=1 & |dy|=2)
-    if((Math.abs(deltaX)===2 && Math.abs(deltaY)===1) || (Math.abs(deltaX)===1 && Math.abs(deltaY)===2)){
-      performJump(deltaX,deltaY);
+  function handleMiniClick(i){
+    if(i===cursorPos) return; // zelfde positie
+    // Check of sprong geldig is
+    const dx=coords[i][0]-coords[cursorPos][0];
+    const dy=coords[i][1]-coords[cursorPos][1];
+    if((Math.abs(dx)===2 && Math.abs(dy)===1)||(Math.abs(dx)===1 && Math.abs(dy)===2)){
+      // valide paardensprong
+      movePlayer(dx,dy);
     }
-    cursorPos = newPos;
-    renderMiniGrid();
+    cursorPos=i;
+    drawMiniRaster();
+  }
+  function getValidFromCursor(i){
+    const dx=coords[i][0]-coords[cursorPos][0];
+    const dy=coords[i][1]-coords[cursorPos][1];
+    return (Math.abs(dx)===2 && Math.abs(dy)===1)||(Math.abs(dx)===1 && Math.abs(dy)===2);
   }
 
-  async function performJump(dx,dy){
+  function movePlayer(dx,dy){
     let player=boardState.players.find(p=>p.id===currentPlayerId);
     if(!player) return;
     let newX=Math.max(0,Math.min(9,player.x+dx));
     let newY=Math.max(0,Math.min(9,player.y+dy));
     const playerRef=db.collection('lobbies').doc(currentLobbyId).collection('players').doc(currentPlayerId);
-
-    // Animate jump
-    const board=document.getElementById('board');
-    const oldCellIndex = player.y*10 + player.x;
-    const newCellIndex = newY*10 + newX;
-    const oldCell = board.children[oldCellIndex];
-    const icon = oldCell.querySelector('.player');
-    if(icon){
-      icon.style.transform = `translate(${dx*42}px, ${dy*42}px)`;
-      setTimeout(()=>icon.style.transform='',300);
-    }
-
     const smug=boardState.smugglers.find(s=>s.x===newX && s.y===newY);
-    if(smug){
-      await db.collection('lobbies').doc(currentLobbyId).collection('smugglers').doc(`${smug.x}_${smug.y}`).delete();
-      player.score+=1;
-      alert('Je hebt een smokkelaar gevangen! Score: '+player.score);
-    }
-
-    await playerRef.update({x:newX,y:newY,score:player.score});
+    if(smug){ db.collection('lobbies').doc(currentLobbyId).collection('smugglers').doc(`${smug.x}_${smug.y}`).delete(); player.score+=1; alert('Je hebt een smokkelaar gevangen! Score: '+player.score); }
+    playerRef.update({x:newX,y:newY,score:player.score});
   }
 
-  function getDeltaX(a,b){ const coords={1:[0,0],2:[1,0],3:[2,0],4:[0,1],5:[1,1],6:[2,1],7:[0,2],8:[1,2],9:[2,2]}; return coords[b][0]-coords[a][0]; }
-  function getDeltaY(a,b){ const coords={1:[0,0],2:[1,0],3:[2,0],4:[0,1],5:[1,1],6:[2,1],7:[0,2],8:[1,2],9:[2,2]}; return coords[b][1]-coords[a][1]; }
+  drawMiniRaster();
 });
 </script>
 
