@@ -18,14 +18,13 @@ input, button { padding:10px; margin:5px 0; font-size:16px; }
 button { cursor:pointer; }
 #board { display:grid; grid-template-columns: repeat(10,40px); grid-template-rows: repeat(10,40px); gap:2px; margin-top:10px; }
 .cell { width:40px; height:40px; background:#444; display:flex; align-items:center; justify-content:center; font-size:22px; position:relative; }
-.player { font-weight:bold; transition: transform 0.25s ease; }
-.player.me { filter: drop-shadow(0 0 6px cyan); } /* Glow rond eigen paard */
-.player.move { transform: scale(1.3); } /* Animatie bij bewegen */
-.score-label { position:absolute; top:-12px; font-size:11px; color:white; font-weight:bold; text-align:center; width:100%; }
-.smuggler { color:gold; font-weight:bold; font-size:22px; }
+.player { font-weight:bold; transition: all 0.25s ease; }
+.player.me { text-shadow: 0 0 8px #0f0; }
+.player.move { transform: scale(1.3); }
+.smuggler { color:gold; font-weight:bold; }
+.score-label { position:absolute; top:-18px; font-size:12px; text-align:center; width:100%; pointer-events:none; }
 </style>
 </head>
-
 <body>
 
 <div id="loginScreen" class="screen active">
@@ -157,30 +156,35 @@ window.addEventListener('DOMContentLoaded', () => {
   restartBtn.onclick=async()=>{
     if(!currentLobbyId) return alert('Geen actieve lobby');
     const lobbyRef = db.collection('lobbies').doc(currentLobbyId);
+
     const playersSnap = await lobbyRef.collection('players').get();
     const batch = db.batch();
+
     let i = 0;
     const usedPositions = [];
     playersSnap.forEach(doc => {
       const pos = startPositions[i % startPositions.length];
       const color = playerColors[i % playerColors.length];
       usedPositions.push(pos);
-      batch.update(doc.ref, { x: pos.x, y: pos.y, color, score:0 });
+      batch.update(doc.ref, { x: pos.x, y: pos.y, color, score: 0 });
       i++;
     });
+
     const smugSnap = await lobbyRef.collection('smugglers').get();
     smugSnap.forEach(doc => batch.delete(doc.ref));
+
     await batch.commit();
     await createSmugglers(lobbyRef, usedPositions);
+    alert('Spel opnieuw gestart! Posities, kleuren en smokkelaars zijn gereset.');
   };
 
-  async function createSmugglers(lobbyRef, usedPositions=[]){
-    let j=0;
-    while(j<3){
-      let x=Math.floor(Math.random()*10);
-      let y=Math.floor(Math.random()*10);
-      if(!usedPositions.find(p=>p.x===x&&p.y===y)){
-        await lobbyRef.collection('smugglers').doc(`${x}_${y}`).set({x,y});
+  async function createSmugglers(lobbyRef, usedPositions=[]) {
+    let j = 0;
+    while (j < 3) {
+      let x = Math.floor(Math.random()*10);
+      let y = Math.floor(Math.random()*10);
+      if (!usedPositions.find(p => p.x === x && p.y === y)) {
+        await lobbyRef.collection('smugglers').doc(`${x}_${y}`).set({ x, y });
         j++;
       }
     }
@@ -188,8 +192,8 @@ window.addEventListener('DOMContentLoaded', () => {
 
   function listenToLobby(lobbyId){
     show('game');
-    const playersRef = db.collection('lobbies').doc(lobbyId).collection('players');
-    const smugglersRef = db.collection('lobbies').doc(lobbyId).collection('smugglers');
+    const playersRef=db.collection('lobbies').doc(lobbyId).collection('players');
+    const smugglersRef=db.collection('lobbies').doc(lobbyId).collection('smugglers');
 
     playersRef.onSnapshot(snapshot=>{
       const players=[];
@@ -207,10 +211,9 @@ window.addEventListener('DOMContentLoaded', () => {
     });
   }
 
-  function renderBoard(players, smugglers){
+  function renderBoard(players,smugglers){
     const board=document.getElementById('board'); 
     board.innerHTML='';
-
     players.forEach(p=>{ if(!p.lastPos)p.lastPos={x:p.x,y:p.y}; });
 
     for(let y=0;y<10;y++){
@@ -220,6 +223,11 @@ window.addEventListener('DOMContentLoaded', () => {
 
         const playerHere = players.find(p=>p.x===x && p.y===y);
         if(playerHere){
+          const nameDiv = document.createElement('div');
+          nameDiv.className='score-label';
+          nameDiv.innerHTML = `${playerHere.nickname} (${playerHere.score})`; 
+          cell.appendChild(nameDiv);
+
           const span=document.createElement('span'); 
           span.className='player'; 
           span.textContent='♞'; 
@@ -231,12 +239,6 @@ window.addEventListener('DOMContentLoaded', () => {
             setTimeout(()=>span.classList.remove('move'),250);
           }
           playerHere.lastPos={x:playerHere.x,y:playerHere.y};
-
-          const scoreDiv=document.createElement('div');
-          scoreDiv.className='score-label';
-          scoreDiv.textContent=playerHere.score;
-          cell.appendChild(scoreDiv);
-
           cell.appendChild(span);
         }
 
@@ -272,17 +274,16 @@ window.addEventListener('DOMContentLoaded', () => {
     let newY=Math.max(0,Math.min(9,player.y+dy));
     const playerRef=db.collection('lobbies').doc(currentLobbyId).collection('players').doc(currentPlayerId);
     const smug=boardState.smugglers.find(s=>s.x===newX && s.y===newY);
-    if(smug){
-      await db.collection('lobbies').doc(currentLobbyId).collection('smugglers').doc(`${smug.x}_${smug.y}`).delete();
+    if(smug){ 
+      await db.collection('lobbies').doc(currentLobbyId).collection('smugglers').doc(`${smug.x}_${smug.y}`).delete(); 
       player.score+=1; 
-      alert('Je hebt een smokkelaar gevangen! Score: '+player.score);
+      alert('Je hebt een smokkelaar gevangen! Score: '+player.score); 
     }
     await playerRef.update({x:newX,y:newY,score:player.score});
   };
 
   function getDeltaX(a,b){ const coords={1:[0,0],2:[1,0],3:[2,0],4:[0,1],5:[1,1],6:[2,1],7:[0,2],8:[1,2],9:[2,2]}; return coords[b][0]-coords[a][0]; }
   function getDeltaY(a,b){ const coords={1:[0,0],2:[1,0],3:[2,0],4:[0,1],5:[1,1],6:[2,1],7:[0,2],8:[1,2],9:[2,2]}; return coords[b][1]-coords[a][1]; }
-
 });
 </script>
 
