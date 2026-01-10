@@ -1,203 +1,307 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
-<meta charset="UTF-8" />
-<title>Paardensprong – Realtime GPS Edition</title>
+<meta charset="UTF-8">
+<title>Paardenspel – Multiplayer GPS</title>
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
 
-<script type="module">
-/* =========================
-   🔥 FIREBASE SETUP
-========================= */
-import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
-import {
-  getFirestore, doc, setDoc, getDoc, updateDoc,
-  onSnapshot, collection, increment
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
-import {
-  getAuth, onAuthStateChanged, signOut
-} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
-const firebaseConfig = {
-  apiKey: "AIzaSyA8LmWdVyebJSYLmKOseg8UFxZege5buMg",
-  authDomain: "paardensprong-game.firebaseapp.com",
-  projectId: "paardensprong-game",
-  storageBucket: "paardensprong-game.appspot.com",
-  messagingSenderId: "815440447520",
-  appId: "1:815440447520:web:72569450503b4e77b85445"
-};
-
-const app = initializeApp(firebaseConfig);
-const db = getFirestore(app);
-const auth = getAuth(app);
-
-/* =========================
-   🎮 CONSTANTEN
-========================= */
-const miniCoords = {
-  1:[0,0],2:[1,0],3:[2,0],
-  4:[0,1],5:[1,1],6:[2,1],
-  7:[0,2],8:[1,2],9:[2,2]
-};
-
-let lobbyId = localStorage.getItem("currentLobbyId");
-let myId = null;
-let lastMini = 5;
-let lastGPS = null;
-
-/* =========================
-   🌍 GPS HELPERS
-========================= */
-function distanceMeters(a,b){
-  const R=6371000;
-  const dLat=(b.lat-a.lat)*Math.PI/180;
-  const dLon=(b.lon-a.lon)*Math.PI/180;
-  const la1=a.lat*Math.PI/180;
-  const la2=b.lat*Math.PI/180;
-  const h=Math.sin(dLat/2)**2 +
-          Math.cos(la1)*Math.cos(la2)*Math.sin(dLon/2)**2;
-  return 2*R*Math.atan2(Math.sqrt(h),Math.sqrt(1-h));
-}
-function bearing(a,b){
-  const y=Math.sin((b.lon-a.lon)*Math.PI/180)*Math.cos(b.lat*Math.PI/180);
-  const x=Math.cos(a.lat*Math.PI/180)*Math.sin(b.lat*Math.PI/180) -
-          Math.sin(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.cos((b.lon-a.lon)*Math.PI/180);
-  return (Math.atan2(y,x)*180/Math.PI+360)%360;
-}
-function miniAngle(a,b){
-  const dx=miniCoords[b][0]-miniCoords[a][0];
-  const dy=miniCoords[a][1]-miniCoords[b][1];
-  return (Math.atan2(dx,dy)*180/Math.PI+360)%360;
-}
-function angleDiff(a,b){
-  let d=Math.abs(a-b)%360;
-  return d>180?360-d:d;
-}
-
-/* =========================
-   🎨 UI
-========================= */
-document.body.innerHTML = `
 <style>
-body{background:#1e1e1e;color:white;font-family:sans-serif;text-align:center}
-#board{display:grid;grid-template:repeat(10,48px)/repeat(10,48px);margin:auto}
-.cell{border:1px solid #444;position:relative}
-.knight{font-size:26px;position:absolute;inset:0;
-display:flex;flex-direction:column;align-items:center;justify-content:center}
-.me{box-shadow:0 0 10px gold inset}
-.name,.score{font-size:10px;line-height:10px}
-#mini{display:grid;grid-template:repeat(3,50px)/repeat(3,50px);gap:4px;margin:auto}
-.mini{border:1px solid #888;cursor:pointer}
-.active{background:#2ecc71}
-button{margin:4px}
-#debug{font-size:12px;margin-top:6px}
-</style>
+body { margin:0; background:#1e1e1e; color:white; font-family:sans-serif; }
+.screen { display:none; padding:20px; }
+.active { display:block; }
 
-<h3 id="info"></h3>
-<div>
-<button id="leave">🚪 Verlaat lobby</button>
-<button id="logout">🔒 Uitloggen</button>
+button, input { padding:8px; margin:4px 0; font-size:15px; }
+
+#board {
+  display:grid;
+  grid-template-columns:repeat(10,40px);
+  grid-template-rows:repeat(10,40px);
+  gap:2px;
+  margin-top:10px;
+}
+
+.cell {
+  width:40px;
+  height:40px;
+  background:#444;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  position:relative;
+}
+
+.player {
+  font-size:22px;
+  transition:transform .2s ease;
+}
+
+.me {
+  text-shadow:0 0 8px #0f0;
+}
+
+.name {
+  position:absolute;
+  top:-8px;
+  font-size:9px;
+  white-space:nowrap;
+}
+
+.score {
+  position:absolute;
+  bottom:-8px;
+  font-size:9px;
+}
+
+.smuggler { color:gold; font-size:20px; }
+
+#mini {
+  display:grid;
+  grid-template-columns:repeat(3,50px);
+  gap:5px;
+  margin-top:10px;
+}
+
+.mini {
+  width:50px;
+  height:50px;
+  background:#333;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  font-size:18px;
+  cursor:pointer;
+}
+
+.mini.active {
+  background:#0a0;
+}
+</style>
+</head>
+<body>
+
+<div id="login" class="screen active">
+  <h2>Login</h2>
+  <input id="email" placeholder="email">
+  <input id="password" type="password" placeholder="wachtwoord">
+  <button onclick="login()">Login / Registreer</button>
 </div>
 
-<div id="board"></div>
+<div id="lobby" class="screen">
+  <h2>Lobby</h2>
+  <div id="userInfo"></div>
+  <input id="nick" placeholder="nickname">
+  <button onclick="createLobby()">Maak lobby</button>
+  <hr>
+  <input id="code" placeholder="lobbycode">
+  <button onclick="joinLobby()">Join lobby</button>
+  <br>
+  <button onclick="logout()">Uitloggen</button>
+</div>
 
-<h4>Mini-raster</h4>
-<div id="mini"></div>
-<div id="debug"></div>
-`;
+<div id="game" class="screen">
+  <div id="gameInfo"></div>
+  <button onclick="restartGame()">Herstart</button>
+  <button onclick="leaveLobby()">Verlaat lobby</button>
+  <div id="board"></div>
 
-/* =========================
-   🧩 BORD
-========================= */
-const board=document.getElementById("board");
-for(let i=0;i<100;i++){
-  const d=document.createElement("div");
-  d.className="cell";
-  board.appendChild(d);
+  <h3>Mini-raster</h3>
+  <div id="mini"></div>
+</div>
+
+<script>
+/* ---------------- Firebase ---------------- */
+firebase.initializeApp({
+  apiKey: "AIzaSyA8LmWdVyebJSYLmKOseg8UFxZege5buMg",
+  authDomain: "paardensprong-game.firebaseapp.com",
+  projectId: "paardensprong-game"
+});
+
+const auth = firebase.auth();
+const db = firebase.firestore();
+
+/* ---------------- State ---------------- */
+let uid, lobbyId;
+let cursor = 5;
+let lastGPS = null;
+const colors = ["white","red","green","blue"];
+const starts = [{x:0,y:0},{x:9,y:0},{x:0,y:9},{x:9,y:9}];
+
+/* ---------------- Auth ---------------- */
+function show(id){
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
 }
 
-/* =========================
-   🔢 MINI RASTER
-========================= */
-const mini=document.getElementById("mini");
+function login(){
+  auth.signInWithEmailAndPassword(email.value,password.value)
+    .catch(()=>auth.createUserWithEmailAndPassword(email.value,password.value));
+}
+
+function logout(){
+  auth.signOut();
+  sessionStorage.clear();
+  show("login");
+}
+
+auth.onAuthStateChanged(u=>{
+  if(u){
+    uid=u.uid;
+    userInfo.innerText=`Ingelogd: ${u.email}`;
+    lobbyId=sessionStorage.getItem("lobbyId");
+    lobbyId ? listenLobby() : show("lobby");
+  }
+});
+
+/* ---------------- Lobby ---------------- */
+async function createLobby(){
+  const ref=db.collection("lobbies").doc();
+  lobbyId=ref.id;
+  sessionStorage.setItem("lobbyId",lobbyId);
+  await ref.set({created:Date.now()});
+  await joinLobby(true);
+}
+
+async function joinLobby(isHost=false){
+  lobbyId=isHost?lobbyId:code.value;
+  sessionStorage.setItem("lobbyId",lobbyId);
+  const ref=db.collection("lobbies").doc(lobbyId);
+  const snap=await ref.collection("players").get();
+  const i=snap.size;
+  await ref.collection("players").doc(uid).set({
+    id:uid,
+    nick:nick.value,
+    x:starts[i].x,
+    y:starts[i].y,
+    color:colors[i],
+    score:0
+  });
+  if(isHost) spawnSmugglers(ref);
+  listenLobby();
+}
+
+function leaveLobby(){
+  db.collection("lobbies").doc(lobbyId).collection("players").doc(uid).delete();
+  sessionStorage.removeItem("lobbyId");
+  show("lobby");
+}
+
+/* ---------------- Game ---------------- */
+function listenLobby(){
+  show("game");
+  const ref=db.collection("lobbies").doc(lobbyId);
+  ref.collection("players").onSnapshot(s=>render());
+  ref.collection("smugglers").onSnapshot(s=>render());
+}
+
+async function restartGame(){
+  const ref=db.collection("lobbies").doc(lobbyId);
+  const p=await ref.collection("players").get();
+  let i=0;
+  p.forEach(d=>{
+    d.ref.update({...starts[i],color:colors[i],score:0});
+    i++;
+  });
+  const s=await ref.collection("smugglers").get();
+  s.forEach(d=>d.ref.delete());
+  spawnSmugglers(ref);
+}
+
+async function spawnSmugglers(ref){
+  for(let i=0;i<3;i++){
+    let x=Math.random()*10|0,y=Math.random()*10|0;
+    await ref.collection("smugglers").doc(x+"_"+y).set({x,y});
+  }
+}
+
+/* ---------------- Render ---------------- */
+async function render(){
+  const ref=db.collection("lobbies").doc(lobbyId);
+  const ps=(await ref.collection("players").get()).docs.map(d=>d.data());
+  const sm=(await ref.collection("smugglers").get()).docs.map(d=>d.data());
+
+  board.innerHTML="";
+  for(let y=0;y<10;y++)for(let x=0;x<10;x++){
+    const c=document.createElement("div");
+    c.className="cell";
+    const p=ps.find(p=>p.x===x&&p.y===y);
+    if(p){
+      c.innerHTML=`<div class="name">${p.nick}</div>
+                   <div class="player ${p.id===uid?"me":""}" style="color:${p.color}">♞</div>
+                   <div class="score">${p.score}</div>`;
+    }
+    const s=sm.find(s=>s.x===x&&s.y===y);
+    if(s) c.innerHTML=`<div class="smuggler">♟</div>`;
+    board.appendChild(c);
+  }
+  gameInfo.innerText=`Lobby: ${lobbyId}`;
+}
+
+/* ---------------- Mini Raster ---------------- */
+const map={1:[0,0],2:[1,0],3:[2,0],4:[0,1],5:[1,1],6:[2,1],7:[0,2],8:[1,2],9:[2,2]};
 for(let i=1;i<=9;i++){
   const d=document.createElement("div");
   d.className="mini";
-  d.textContent=i;
-  if(i===5)d.classList.add("active");
+  d.innerText=i;
   d.onclick=()=>miniClick(i);
   mini.appendChild(d);
 }
-function highlight(n){
-  document.querySelectorAll(".mini").forEach(m=>m.classList.remove("active"));
-  mini.children[n-1].classList.add("active");
+updateMini();
+
+function updateMini(){
+  document.querySelectorAll(".mini").forEach((m,i)=>{
+    m.classList.toggle("active",i+1===cursor);
+  });
 }
 
-/* =========================
-   🐎 MINI CLICK
-========================= */
 async function miniClick(n){
-  highlight(n);
+  const dx=map[n][0]-map[cursor][0];
+  const dy=map[n][1]-map[cursor][1];
+  cursor=n;
+  updateMini();
 
-  const dx=Math.abs(miniCoords[n][0]-miniCoords[lastMini][0]);
-  const dy=Math.abs(miniCoords[n][1]-miniCoords[lastMini][1]);
-  const knight=(dx===1&&dy===2)||(dx===2&&dy===1);
+  if(Math.abs(dx*dy)===2){
+    const ref=db.collection("lobbies").doc(lobbyId);
+    const pRef=ref.collection("players").doc(uid);
+    const p=(await pRef.get()).data();
 
+    const newX=Math.max(0,Math.min(9,p.x+dx));
+    const newY=Math.max(0,Math.min(9,p.y+dy));
+
+    await handleGPS(dx,dy,pRef,p,newX,newY);
+  }
+}
+
+/* ---------------- GPS Bonus ---------------- */
+async function handleGPS(dx,dy,pRef,p,x,y){
   navigator.geolocation.getCurrentPosition(async pos=>{
-    const now={lat:pos.coords.latitude,lon:pos.coords.longitude};
-
-    if(knight && lastGPS){
-      const dist=distanceMeters(lastGPS,now);
-      const diff=angleDiff(bearing(lastGPS,now),miniAngle(lastMini,n));
-
-      if(dist>=300 && diff<=10){
-        await updateDoc(doc(db,"lobbies",lobbyId,"players",myId),{
-          score:increment(1)
-        });
-        document.getElementById("debug").innerText="🎉 GPS bonus!";
-      } else {
-        document.getElementById("debug").innerText=`Afstand ${Math.round(dist)}m | Δ ${Math.round(diff)}°`;
-      }
-
-      await updateDoc(doc(db,"lobbies",lobbyId,"players",myId),{
-        x:increment(miniCoords[n][0]-miniCoords[lastMini][0]),
-        y:increment(miniCoords[n][1]-miniCoords[lastMini][1])
-      });
+    let bonus=0;
+    if(lastGPS){
+      const d=haversine(lastGPS,pos.coords);
+      const angle1=Math.atan2(dy,dx)*180/Math.PI;
+      const angle2=bearing(lastGPS,pos.coords);
+      if(d>300 && Math.abs(angle1-angle2)<10) bonus=1;
     }
-
-    lastMini=n;
-    lastGPS=now;
+    lastGPS=pos.coords;
+    await pRef.update({x,y,score:p.score+bonus});
   });
 }
 
-/* =========================
-   🔥 REALTIME
-========================= */
-onAuthStateChanged(auth,u=>{
-  if(!u)return;
-  myId=u.uid;
-  document.getElementById("info").innerText=`${u.email} | Lobby ${lobbyId}`;
-
-  onSnapshot(collection(db,"lobbies",lobbyId,"players"),snap=>{
-    document.querySelectorAll(".knight").forEach(k=>k.remove());
-    snap.forEach(d=>{
-      const p=d.data();
-      const idx=p.y*10+p.x;
-      const el=document.createElement("div");
-      el.className="knight"+(d.id===myId?" me":"");
-      el.style.color=p.color;
-      el.innerHTML=`♞<div class="name">${p.nickname}</div><div class="score">${p.score}</div>`;
-      board.children[idx]?.appendChild(el);
-    });
-  });
-});
-
-/* =========================
-   🚪 / 🔒
-========================= */
-document.getElementById("leave").onclick=()=>location.reload();
-document.getElementById("logout").onclick=()=>signOut(auth);
-
+function haversine(a,b){
+  const R=6371000;
+  const dLat=(b.latitude-a.latitude)*Math.PI/180;
+  const dLon=(b.longitude-a.longitude)*Math.PI/180;
+  return 2*R*Math.asin(Math.sqrt(
+    Math.sin(dLat/2)**2+
+    Math.cos(a.latitude*Math.PI/180)*Math.cos(b.latitude*Math.PI/180)*Math.sin(dLon/2)**2
+  ));
+}
+function bearing(a,b){
+  return Math.atan2(b.longitude-a.longitude,b.latitude-a.latitude)*180/Math.PI;
+}
 </script>
-</head>
-<body></body>
+</body>
 </html>
