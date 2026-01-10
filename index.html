@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="nl">
+<head>
+<meta charset="UTF-8" />
+<title>Paardensprong – Realtime GPS Edition</title>
+
+<script type="module">
+/* =========================
+   🔥 FIREBASE SETUP
+========================= */
+import { initializeApp } from "https://www.gstatic.com/firebasejs/10.7.1/firebase-app.js";
+import {
+  getFirestore, doc, setDoc, getDoc, updateDoc,
+  onSnapshot, collection, increment
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-firestore.js";
+import {
+  getAuth, onAuthStateChanged, signOut
+} from "https://www.gstatic.com/firebasejs/10.7.1/firebase-auth.js";
+
+const firebaseConfig = {
+  apiKey: "AIzaSyA8LmWdVyebJSYLmKOseg8UFxZege5buMg",
+  authDomain: "paardensprong-game.firebaseapp.com",
+  projectId: "paardensprong-game",
+  storageBucket: "paardensprong-game.appspot.com",
+  messagingSenderId: "815440447520",
+  appId: "1:815440447520:web:72569450503b4e77b85445"
+};
+
+const app = initializeApp(firebaseConfig);
+const db = getFirestore(app);
+const auth = getAuth(app);
+
+/* =========================
+   🎮 CONSTANTEN
+========================= */
+const miniCoords = {
+  1:[0,0],2:[1,0],3:[2,0],
+  4:[0,1],5:[1,1],6:[2,1],
+  7:[0,2],8:[1,2],9:[2,2]
+};
+
+let lobbyId = localStorage.getItem("currentLobbyId");
+let myId = null;
+let lastMini = 5;
+let lastGPS = null;
+
+/* =========================
+   🌍 GPS HELPERS
+========================= */
+function distanceMeters(a,b){
+  const R=6371000;
+  const dLat=(b.lat-a.lat)*Math.PI/180;
+  const dLon=(b.lon-a.lon)*Math.PI/180;
+  const la1=a.lat*Math.PI/180;
+  const la2=b.lat*Math.PI/180;
+  const h=Math.sin(dLat/2)**2 +
+          Math.cos(la1)*Math.cos(la2)*Math.sin(dLon/2)**2;
+  return 2*R*Math.atan2(Math.sqrt(h),Math.sqrt(1-h));
+}
+function bearing(a,b){
+  const y=Math.sin((b.lon-a.lon)*Math.PI/180)*Math.cos(b.lat*Math.PI/180);
+  const x=Math.cos(a.lat*Math.PI/180)*Math.sin(b.lat*Math.PI/180) -
+          Math.sin(a.lat*Math.PI/180)*Math.cos(b.lat*Math.PI/180)*Math.cos((b.lon-a.lon)*Math.PI/180);
+  return (Math.atan2(y,x)*180/Math.PI+360)%360;
+}
+function miniAngle(a,b){
+  const dx=miniCoords[b][0]-miniCoords[a][0];
+  const dy=miniCoords[a][1]-miniCoords[b][1];
+  return (Math.atan2(dx,dy)*180/Math.PI+360)%360;
+}
+function angleDiff(a,b){
+  let d=Math.abs(a-b)%360;
+  return d>180?360-d:d;
+}
+
+/* =========================
+   🎨 UI
+========================= */
+document.body.innerHTML = `
+<style>
+body{background:#1e1e1e;color:white;font-family:sans-serif;text-align:center}
+#board{display:grid;grid-template:repeat(10,48px)/repeat(10,48px);margin:auto}
+.cell{border:1px solid #444;position:relative}
+.knight{font-size:26px;position:absolute;inset:0;
+display:flex;flex-direction:column;align-items:center;justify-content:center}
+.me{box-shadow:0 0 10px gold inset}
+.name,.score{font-size:10px;line-height:10px}
+#mini{display:grid;grid-template:repeat(3,50px)/repeat(3,50px);gap:4px;margin:auto}
+.mini{border:1px solid #888;cursor:pointer}
+.active{background:#2ecc71}
+button{margin:4px}
+#debug{font-size:12px;margin-top:6px}
+</style>
+
+<h3 id="info"></h3>
+<div>
+<button id="leave">🚪 Verlaat lobby</button>
+<button id="logout">🔒 Uitloggen</button>
+</div>
+
+<div id="board"></div>
+
+<h4>Mini-raster</h4>
+<div id="mini"></div>
+<div id="debug"></div>
+`;
+
+/* =========================
+   🧩 BORD
+========================= */
+const board=document.getElementById("board");
+for(let i=0;i<100;i++){
+  const d=document.createElement("div");
+  d.className="cell";
+  board.appendChild(d);
+}
+
+/* =========================
+   🔢 MINI RASTER
+========================= */
+const mini=document.getElementById("mini");
+for(let i=1;i<=9;i++){
+  const d=document.createElement("div");
+  d.className="mini";
+  d.textContent=i;
+  if(i===5)d.classList.add("active");
+  d.onclick=()=>miniClick(i);
+  mini.appendChild(d);
+}
+function highlight(n){
+  document.querySelectorAll(".mini").forEach(m=>m.classList.remove("active"));
+  mini.children[n-1].classList.add("active");
+}
+
+/* =========================
+   🐎 MINI CLICK
+========================= */
+async function miniClick(n){
+  highlight(n);
+
+  const dx=Math.abs(miniCoords[n][0]-miniCoords[lastMini][0]);
+  const dy=Math.abs(miniCoords[n][1]-miniCoords[lastMini][1]);
+  const knight=(dx===1&&dy===2)||(dx===2&&dy===1);
+
+  navigator.geolocation.getCurrentPosition(async pos=>{
+    const now={lat:pos.coords.latitude,lon:pos.coords.longitude};
+
+    if(knight && lastGPS){
+      const dist=distanceMeters(lastGPS,now);
+      const diff=angleDiff(bearing(lastGPS,now),miniAngle(lastMini,n));
+
+      if(dist>=300 && diff<=10){
+        await updateDoc(doc(db,"lobbies",lobbyId,"players",myId),{
+          score:increment(1)
+        });
+        document.getElementById("debug").innerText="🎉 GPS bonus!";
+      } else {
+        document.getElementById("debug").innerText=`Afstand ${Math.round(dist)}m | Δ ${Math.round(diff)}°`;
+      }
+
+      await updateDoc(doc(db,"lobbies",lobbyId,"players",myId),{
+        x:increment(miniCoords[n][0]-miniCoords[lastMini][0]),
+        y:increment(miniCoords[n][1]-miniCoords[lastMini][1])
+      });
+    }
+
+    lastMini=n;
+    lastGPS=now;
+  });
+}
+
+/* =========================
+   🔥 REALTIME
+========================= */
+onAuthStateChanged(auth,u=>{
+  if(!u)return;
+  myId=u.uid;
+  document.getElementById("info").innerText=`${u.email} | Lobby ${lobbyId}`;
+
+  onSnapshot(collection(db,"lobbies",lobbyId,"players"),snap=>{
+    document.querySelectorAll(".knight").forEach(k=>k.remove());
+    snap.forEach(d=>{
+      const p=d.data();
+      const idx=p.y*10+p.x;
+      const el=document.createElement("div");
+      el.className="knight"+(d.id===myId?" me":"");
+      el.style.color=p.color;
+      el.innerHTML=`♞<div class="name">${p.nickname}</div><div class="score">${p.score}</div>`;
+      board.children[idx]?.appendChild(el);
+    });
+  });
+});
+
+/* =========================
+   🚪 / 🔒
+========================= */
+document.getElementById("leave").onclick=()=>location.reload();
+document.getElementById("logout").onclick=()=>signOut(auth);
+
+</script>
+</head>
+<body></body>
+</html>
