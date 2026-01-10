@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<title>Paardenspel – Multiplayer GPS</title>
+<title>Paardensprong – Bonus Pincode</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -34,23 +34,10 @@ button,input { padding:8px; margin:4px 0; }
   font-size:22px;
   transition:transform .15s ease;
 }
-.player.move {
-  transform:scale(1.2);
-}
-.me {
-  text-shadow:0 0 8px #0f0;
-}
-.name {
-  position:absolute;
-  top:-7px;
-  font-size:9px;
-  white-space:nowrap;
-}
-.score {
-  position:absolute;
-  bottom:-7px;
-  font-size:9px;
-}
+.player.move { transform:scale(1.2); }
+.me { text-shadow:0 0 8px #0f0; }
+.name { position:absolute; top:-7px; font-size:9px; }
+.score { position:absolute; bottom:-7px; font-size:9px; }
 .smuggler { color:gold; font-size:20px; }
 
 #mini {
@@ -70,10 +57,8 @@ button,input { padding:8px; margin:4px 0; }
 .mini.active { background:#0a0; }
 .mini.possible { background:#2a6cff; }
 
-#gpsInfo {
-  font-size:12px;
+#bonusBox {
   margin-top:10px;
-  opacity:0.9;
 }
 </style>
 </head>
@@ -106,11 +91,16 @@ button,input { padding:8px; margin:4px 0; }
 
   <h3>Mini-raster</h3>
   <div id="mini"></div>
-  <div id="gpsInfo"></div>
+
+  <div id="bonusBox">
+    <input id="pincode" placeholder="3-cijferige pincode" maxlength="3">
+    <button onclick="checkBonus()">Bonus</button>
+    <div id="bonusMsg"></div>
+  </div>
 </div>
 
 <script>
-/* ---------- Firebase ---------- */
+/* Firebase */
 firebase.initializeApp({
   apiKey: "AIzaSyA8LmWdVyebJSYLmKOseg8UFxZege5buMg",
   authDomain: "paardensprong-game.firebaseapp.com",
@@ -118,24 +108,31 @@ firebase.initializeApp({
 });
 const auth=firebase.auth(), db=firebase.firestore();
 
-/* ---------- State ---------- */
+/* State */
 let uid,lobbyId;
 let cursor=5;
-let lastGPS=null;
+let lastMini=null;
+
+/* π pincodes */
+const piCodes={
+  1:"141",2:"592",3:"653",
+  4:"589",5:"793",6:"238",
+  7:"462",8:"643",9:"383"
+};
+
 const colors=["white","red","green","blue"];
 const starts=[{x:0,y:0},{x:9,y:0},{x:0,y:9},{x:9,y:9}];
 const map={1:[0,0],2:[1,0],3:[2,0],4:[0,1],5:[1,1],6:[2,1],7:[0,2],8:[1,2],9:[2,2]};
 
-/* ---------- Helpers ---------- */
 function show(id){
   document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
   document.getElementById(id).classList.add("active");
 }
 
-/* ---------- Auth ---------- */
+/* Auth */
 function login(){
   auth.signInWithEmailAndPassword(email.value,password.value)
-    .catch(()=>auth.createUserWithEmailAndPassword(email.value,password.value));
+   .catch(()=>auth.createUserWithEmailAndPassword(email.value,password.value));
 }
 function logout(){
   auth.signOut();
@@ -151,7 +148,7 @@ auth.onAuthStateChanged(u=>{
   }
 });
 
-/* ---------- Lobby ---------- */
+/* Lobby */
 async function createLobby(){
   const ref=db.collection("lobbies").doc();
   lobbyId=ref.id;
@@ -179,7 +176,7 @@ function leaveLobby(){
   show("lobby");
 }
 
-/* ---------- Game ---------- */
+/* Game */
 function listenLobby(){
   show("game");
   const ref=db.collection("lobbies").doc(lobbyId);
@@ -195,14 +192,8 @@ async function restartGame(){
   s.forEach(d=>d.ref.delete());
   spawnSmugglers(ref);
 }
-async function spawnSmugglers(ref){
-  for(let i=0;i<3;i++){
-    let x=Math.random()*10|0,y=Math.random()*10|0;
-    await ref.collection("smugglers").doc(x+"_"+y).set({x,y});
-  }
-}
 
-/* ---------- Render ---------- */
+/* Render */
 async function render(){
   const ref=db.collection("lobbies").doc(lobbyId);
   const ps=(await ref.collection("players").get()).docs.map(d=>d.data());
@@ -222,7 +213,7 @@ async function render(){
   gameInfo.innerText=`Lobby: ${lobbyId}`;
 }
 
-/* ---------- Mini Raster ---------- */
+/* Mini-raster */
 for(let i=1;i<=9;i++){
   const d=document.createElement("div");
   d.className="mini"; d.innerText=i;
@@ -248,49 +239,25 @@ async function miniClick(n){
   cursor=n; updateMini();
   if(Math.abs(dx*dy)!==2) return;
 
+  lastMini=n;
   const ref=db.collection("lobbies").doc(lobbyId).collection("players").doc(uid);
   const p=(await ref.get()).data();
-  const x=Math.max(0,Math.min(9,p.x+dx));
-  const y=Math.max(0,Math.min(9,p.y+dy));
-
-  await ref.update({x,y});
-  handleGPSBonus(dx,dy,ref,p);
+  await ref.update({x:p.x+dx,y:p.y+dy});
+  bonusMsg.innerText="Voer pincode in voor bonus";
 }
 
-/* ---------- GPS ---------- */
-function handleGPSBonus(dx,dy,ref,p){
-  navigator.geolocation.getCurrentPosition(pos=>{
-    let bonus=0;
-    if(lastGPS){
-      const d=haversine(lastGPS,pos.coords);
-      const a1=Math.atan2(dy,dx)*180/Math.PI;
-      const a2=bearing(lastGPS,pos.coords);
-      if(d>=300 && Math.abs(a1-a2)<=10) bonus=1;
-    }
-    lastGPS=pos.coords;
-    if(bonus) ref.update({score:p.score+1});
-    updateGPSInfo(pos.coords);
-  });
-}
-
-function updateGPSInfo(c){
-  gpsInfo.innerHTML=
-   `📍 Huidig: ${c.latitude.toFixed(5)}, ${c.longitude.toFixed(5)}<br>`+
-   (lastGPS?`💾 Vorig: ${lastGPS.latitude.toFixed(5)}, ${lastGPS.longitude.toFixed(5)}<br>`:"")+
-   (lastGPS?`📏 ${haversine(lastGPS,c).toFixed(1)} m<br>🧭 ${bearing(lastGPS,c).toFixed(1)}°`:"");
-}
-
-function haversine(a,b){
-  const R=6371000;
-  const dLat=(b.latitude-a.latitude)*Math.PI/180;
-  const dLon=(b.longitude-a.longitude)*Math.PI/180;
-  return 2*R*Math.asin(Math.sqrt(
-    Math.sin(dLat/2)**2+
-    Math.cos(a.latitude*Math.PI/180)*Math.cos(b.latitude*Math.PI/180)*Math.sin(dLon/2)**2
-  ));
-}
-function bearing(a,b){
-  return Math.atan2(b.longitude-a.longitude,b.latitude-a.latitude)*180/Math.PI;
+/* Bonus */
+async function checkBonus(){
+  if(!lastMini) return;
+  if(pincode.value===piCodes[lastMini]){
+    const ref=db.collection("lobbies").doc(lobbyId).collection("players").doc(uid);
+    const p=(await ref.get()).data();
+    await ref.update({score:p.score+1});
+    bonusMsg.innerText="✅ Bonus verdiend!";
+  } else {
+    bonusMsg.innerText="❌ Verkeerde pincode";
+  }
+  pincode.value="";
 }
 </script>
 </body>
