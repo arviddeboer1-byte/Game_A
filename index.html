@@ -13,8 +13,7 @@
 body { margin:0; background:#1e1e1e; color:white; font-family:sans-serif; }
 .screen { display:none; padding:20px; }
 .active { display:block; }
-
-button, input { padding:8px; margin:4px 0; font-size:15px; }
+button,input { padding:8px; margin:4px 0; }
 
 #board {
   display:grid;
@@ -23,39 +22,35 @@ button, input { padding:8px; margin:4px 0; font-size:15px; }
   gap:2px;
   margin-top:10px;
 }
-
 .cell {
-  width:40px;
-  height:40px;
+  width:40px; height:40px;
   background:#444;
   display:flex;
   align-items:center;
   justify-content:center;
   position:relative;
 }
-
 .player {
   font-size:22px;
-  transition:transform .2s ease;
+  transition:transform .15s ease;
 }
-
+.player.move {
+  transform:scale(1.2);
+}
 .me {
   text-shadow:0 0 8px #0f0;
 }
-
 .name {
   position:absolute;
-  top:-8px;
+  top:-7px;
   font-size:9px;
   white-space:nowrap;
 }
-
 .score {
   position:absolute;
-  bottom:-8px;
+  bottom:-7px;
   font-size:9px;
 }
-
 .smuggler { color:gold; font-size:20px; }
 
 #mini {
@@ -64,20 +59,21 @@ button, input { padding:8px; margin:4px 0; font-size:15px; }
   gap:5px;
   margin-top:10px;
 }
-
 .mini {
-  width:50px;
-  height:50px;
+  width:50px; height:50px;
   background:#333;
   display:flex;
   align-items:center;
   justify-content:center;
-  font-size:18px;
   cursor:pointer;
 }
+.mini.active { background:#0a0; }
+.mini.possible { background:#2a6cff; }
 
-.mini.active {
-  background:#0a0;
+#gpsInfo {
+  font-size:12px;
+  margin-top:10px;
+  opacity:0.9;
 }
 </style>
 </head>
@@ -97,8 +93,7 @@ button, input { padding:8px; margin:4px 0; font-size:15px; }
   <button onclick="createLobby()">Maak lobby</button>
   <hr>
   <input id="code" placeholder="lobbycode">
-  <button onclick="joinLobby()">Join lobby</button>
-  <br>
+  <button onclick="joinLobby()">Join lobby</button><br>
   <button onclick="logout()">Uitloggen</button>
 </div>
 
@@ -106,110 +101,100 @@ button, input { padding:8px; margin:4px 0; font-size:15px; }
   <div id="gameInfo"></div>
   <button onclick="restartGame()">Herstart</button>
   <button onclick="leaveLobby()">Verlaat lobby</button>
+
   <div id="board"></div>
 
   <h3>Mini-raster</h3>
   <div id="mini"></div>
+  <div id="gpsInfo"></div>
 </div>
 
 <script>
-/* ---------------- Firebase ---------------- */
+/* ---------- Firebase ---------- */
 firebase.initializeApp({
   apiKey: "AIzaSyA8LmWdVyebJSYLmKOseg8UFxZege5buMg",
   authDomain: "paardensprong-game.firebaseapp.com",
   projectId: "paardensprong-game"
 });
+const auth=firebase.auth(), db=firebase.firestore();
 
-const auth = firebase.auth();
-const db = firebase.firestore();
+/* ---------- State ---------- */
+let uid,lobbyId;
+let cursor=5;
+let lastGPS=null;
+const colors=["white","red","green","blue"];
+const starts=[{x:0,y:0},{x:9,y:0},{x:0,y:9},{x:9,y:9}];
+const map={1:[0,0],2:[1,0],3:[2,0],4:[0,1],5:[1,1],6:[2,1],7:[0,2],8:[1,2],9:[2,2]};
 
-/* ---------------- State ---------------- */
-let uid, lobbyId;
-let cursor = 5;
-let lastGPS = null;
-const colors = ["white","red","green","blue"];
-const starts = [{x:0,y:0},{x:9,y:0},{x:0,y:9},{x:9,y:9}];
-
-/* ---------------- Auth ---------------- */
+/* ---------- Helpers ---------- */
 function show(id){
-  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
-  document.getElementById(id).classList.add('active');
+  document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
+  document.getElementById(id).classList.add("active");
 }
 
+/* ---------- Auth ---------- */
 function login(){
   auth.signInWithEmailAndPassword(email.value,password.value)
     .catch(()=>auth.createUserWithEmailAndPassword(email.value,password.value));
 }
-
 function logout(){
   auth.signOut();
   sessionStorage.clear();
   show("login");
 }
-
 auth.onAuthStateChanged(u=>{
   if(u){
     uid=u.uid;
     userInfo.innerText=`Ingelogd: ${u.email}`;
     lobbyId=sessionStorage.getItem("lobbyId");
-    lobbyId ? listenLobby() : show("lobby");
+    lobbyId?listenLobby():show("lobby");
   }
 });
 
-/* ---------------- Lobby ---------------- */
+/* ---------- Lobby ---------- */
 async function createLobby(){
   const ref=db.collection("lobbies").doc();
   lobbyId=ref.id;
   sessionStorage.setItem("lobbyId",lobbyId);
   await ref.set({created:Date.now()});
-  await joinLobby(true);
+  joinLobby(true);
 }
-
-async function joinLobby(isHost=false){
-  lobbyId=isHost?lobbyId:code.value;
+async function joinLobby(host=false){
+  lobbyId=host?lobbyId:code.value;
   sessionStorage.setItem("lobbyId",lobbyId);
   const ref=db.collection("lobbies").doc(lobbyId);
   const snap=await ref.collection("players").get();
   const i=snap.size;
   await ref.collection("players").doc(uid).set({
-    id:uid,
-    nick:nick.value,
-    x:starts[i].x,
-    y:starts[i].y,
-    color:colors[i],
-    score:0
+    id:uid,nick:nick.value,
+    x:starts[i].x,y:starts[i].y,
+    color:colors[i],score:0
   });
-  if(isHost) spawnSmugglers(ref);
+  if(host) spawnSmugglers(ref);
   listenLobby();
 }
-
 function leaveLobby(){
   db.collection("lobbies").doc(lobbyId).collection("players").doc(uid).delete();
   sessionStorage.removeItem("lobbyId");
   show("lobby");
 }
 
-/* ---------------- Game ---------------- */
+/* ---------- Game ---------- */
 function listenLobby(){
   show("game");
   const ref=db.collection("lobbies").doc(lobbyId);
-  ref.collection("players").onSnapshot(s=>render());
-  ref.collection("smugglers").onSnapshot(s=>render());
+  ref.collection("players").onSnapshot(render);
+  ref.collection("smugglers").onSnapshot(render);
 }
-
 async function restartGame(){
   const ref=db.collection("lobbies").doc(lobbyId);
   const p=await ref.collection("players").get();
   let i=0;
-  p.forEach(d=>{
-    d.ref.update({...starts[i],color:colors[i],score:0});
-    i++;
-  });
+  p.forEach(d=>d.ref.update({...starts[i],color:colors[i],score:0})&&i++);
   const s=await ref.collection("smugglers").get();
   s.forEach(d=>d.ref.delete());
   spawnSmugglers(ref);
 }
-
 async function spawnSmugglers(ref){
   for(let i=0;i<3;i++){
     let x=Math.random()*10|0,y=Math.random()*10|0;
@@ -217,35 +202,30 @@ async function spawnSmugglers(ref){
   }
 }
 
-/* ---------------- Render ---------------- */
+/* ---------- Render ---------- */
 async function render(){
   const ref=db.collection("lobbies").doc(lobbyId);
   const ps=(await ref.collection("players").get()).docs.map(d=>d.data());
   const sm=(await ref.collection("smugglers").get()).docs.map(d=>d.data());
-
   board.innerHTML="";
   for(let y=0;y<10;y++)for(let x=0;x<10;x++){
-    const c=document.createElement("div");
-    c.className="cell";
+    const c=document.createElement("div"); c.className="cell";
     const p=ps.find(p=>p.x===x&&p.y===y);
     if(p){
       c.innerHTML=`<div class="name">${p.nick}</div>
-                   <div class="player ${p.id===uid?"me":""}" style="color:${p.color}">♞</div>
-                   <div class="score">${p.score}</div>`;
+      <div class="player ${p.id===uid?"me":""}" style="color:${p.color}">♞</div>
+      <div class="score">${p.score}</div>`;
     }
-    const s=sm.find(s=>s.x===x&&s.y===y);
-    if(s) c.innerHTML=`<div class="smuggler">♟</div>`;
+    if(sm.find(s=>s.x===x&&s.y===y)) c.innerHTML=`<div class="smuggler">♟</div>`;
     board.appendChild(c);
   }
   gameInfo.innerText=`Lobby: ${lobbyId}`;
 }
 
-/* ---------------- Mini Raster ---------------- */
-const map={1:[0,0],2:[1,0],3:[2,0],4:[0,1],5:[1,1],6:[2,1],7:[0,2],8:[1,2],9:[2,2]};
+/* ---------- Mini Raster ---------- */
 for(let i=1;i<=9;i++){
   const d=document.createElement("div");
-  d.className="mini";
-  d.innerText=i;
+  d.className="mini"; d.innerText=i;
   d.onclick=()=>miniClick(i);
   mini.appendChild(d);
 }
@@ -253,41 +233,51 @@ updateMini();
 
 function updateMini(){
   document.querySelectorAll(".mini").forEach((m,i)=>{
-    m.classList.toggle("active",i+1===cursor);
+    const n=i+1;
+    const dx=map[n][0]-map[cursor][0];
+    const dy=map[n][1]-map[cursor][1];
+    m.classList.remove("active","possible");
+    if(n===cursor) m.classList.add("active");
+    else if(Math.abs(dx*dy)===2) m.classList.add("possible");
   });
 }
 
 async function miniClick(n){
   const dx=map[n][0]-map[cursor][0];
   const dy=map[n][1]-map[cursor][1];
-  cursor=n;
-  updateMini();
+  cursor=n; updateMini();
+  if(Math.abs(dx*dy)!==2) return;
 
-  if(Math.abs(dx*dy)===2){
-    const ref=db.collection("lobbies").doc(lobbyId);
-    const pRef=ref.collection("players").doc(uid);
-    const p=(await pRef.get()).data();
+  const ref=db.collection("lobbies").doc(lobbyId).collection("players").doc(uid);
+  const p=(await ref.get()).data();
+  const x=Math.max(0,Math.min(9,p.x+dx));
+  const y=Math.max(0,Math.min(9,p.y+dy));
 
-    const newX=Math.max(0,Math.min(9,p.x+dx));
-    const newY=Math.max(0,Math.min(9,p.y+dy));
-
-    await handleGPS(dx,dy,pRef,p,newX,newY);
-  }
+  await ref.update({x,y});
+  handleGPSBonus(dx,dy,ref,p);
 }
 
-/* ---------------- GPS Bonus ---------------- */
-async function handleGPS(dx,dy,pRef,p,x,y){
-  navigator.geolocation.getCurrentPosition(async pos=>{
+/* ---------- GPS ---------- */
+function handleGPSBonus(dx,dy,ref,p){
+  navigator.geolocation.getCurrentPosition(pos=>{
     let bonus=0;
     if(lastGPS){
       const d=haversine(lastGPS,pos.coords);
-      const angle1=Math.atan2(dy,dx)*180/Math.PI;
-      const angle2=bearing(lastGPS,pos.coords);
-      if(d>300 && Math.abs(angle1-angle2)<10) bonus=1;
+      const a1=Math.atan2(dy,dx)*180/Math.PI;
+      const a2=bearing(lastGPS,pos.coords);
+      if(d>=300 && Math.abs(a1-a2)<=10) bonus=1;
     }
     lastGPS=pos.coords;
-    await pRef.update({x,y,score:p.score+bonus});
+    if(bonus) ref.update({score:p.score+1});
+    updateGPSInfo(pos.coords);
   });
+}
+
+function updateGPSInfo(c){
+  gpsInfo.innerHTML=
+   `📍 Huidig: ${c.latitude.toFixed(5)}, ${c.longitude.toFixed(5)}<br>`+
+   (lastGPS?`💾 Vorig: ${lastGPS.latitude.toFixed(5)}, ${lastGPS.longitude.toFixed(5)}<br>`:"")+
+   (lastGPS?`📏 ${haversine(lastGPS,c).toFixed(1)} m<br>🧭 ${bearing(lastGPS,c).toFixed(1)}°`:"");
 }
 
 function haversine(a,b){
