@@ -2,7 +2,7 @@
 <html lang="nl">
 <head>
 <meta charset="UTF-8">
-<title>Paardensprong – Bonus Pincode</title>
+<title>Paardensprong – Multiplayer</title>
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
 
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
@@ -10,58 +10,24 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
 <style>
-body { margin:0; background:#1e1e1e; color:white; font-family:sans-serif; }
-.screen { display:none; padding:20px; }
-.active { display:block; }
-button,input { padding:8px; margin:4px 0; }
-
-#board {
-  display:grid;
-  grid-template-columns:repeat(10,40px);
-  grid-template-rows:repeat(10,40px);
-  gap:2px;
-  margin-top:10px;
-}
-.cell {
-  width:40px; height:40px;
-  background:#444;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  position:relative;
-}
-.player {
-  font-size:22px;
-  transition:transform .15s ease;
-}
-.player.move { transform:scale(1.2); }
-.me { text-shadow:0 0 8px #0f0; }
-.name { position:absolute; top:-7px; font-size:9px; }
-.score { position:absolute; bottom:-7px; font-size:9px; }
-.smuggler { color:gold; font-size:20px; }
-
-#mini {
-  display:grid;
-  grid-template-columns:repeat(3,50px);
-  gap:5px;
-  margin-top:10px;
-}
-.mini {
-  width:50px; height:50px;
-  background:#333;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  cursor:pointer;
-}
-.mini.active { background:#0a0; }
-.mini.possible { background:#2a6cff; }
-
-#bonusBox {
-  margin-top:10px;
-}
+body{margin:0;background:#1e1e1e;color:white;font-family:sans-serif}
+.screen{display:none;padding:20px}
+.active{display:block}
+button,input{padding:8px;margin:4px}
+#board{display:grid;grid-template-columns:repeat(10,40px);gap:2px;margin-top:10px}
+.cell{width:40px;height:40px;background:#444;display:flex;align-items:center;justify-content:center;position:relative}
+.player{font-size:22px}
+.me{text-shadow:0 0 8px #0f0}
+.name{position:absolute;top:-6px;font-size:9px}
+.score{position:absolute;bottom:-6px;font-size:9px}
+.smuggler{color:gold;font-size:20px}
+#mini{display:grid;grid-template-columns:repeat(3,50px);gap:5px;margin-top:10px}
+.mini{width:50px;height:50px;background:#333;display:flex;align-items:center;justify-content:center;cursor:pointer}
+.mini.active{background:#0a0}
+.mini.possible{background:#2a6cff}
 </style>
 </head>
+
 <body>
 
 <div id="login" class="screen active">
@@ -76,113 +42,90 @@ button,input { padding:8px; margin:4px 0; }
   <div id="userInfo"></div>
   <input id="nick" placeholder="nickname">
   <button onclick="createLobby()">Maak lobby</button>
-  <hr>
-  <input id="code" placeholder="lobbycode">
-  <button onclick="joinLobby()">Join lobby</button><br>
   <button onclick="logout()">Uitloggen</button>
 </div>
 
 <div id="game" class="screen">
   <div id="gameInfo"></div>
-  <button onclick="restartGame()">Herstart</button>
-  <button onclick="leaveLobby()">Verlaat lobby</button>
+  <button onclick="restartGame()">🔄 Herstart</button>
+  <button onclick="leaveLobby()">🚪 Verlaat lobby</button>
+  <button onclick="shareLobby()">📲 Deel via WhatsApp</button>
 
   <div id="board"></div>
 
   <h3>Mini-raster</h3>
   <div id="mini"></div>
-
-  <div id="bonusBox">
-    <input id="pincode" placeholder="3-cijferige pincode" maxlength="3">
-    <button onclick="checkBonus()">Bonus</button>
-    <div id="bonusMsg"></div>
-  </div>
 </div>
 
 <script>
-/* Firebase */
 firebase.initializeApp({
-  apiKey: "AIzaSyA8LmWdVyebJSYLmKOseg8UFxZege5buMg",
-  authDomain: "paardensprong-game.firebaseapp.com",
-  projectId: "paardensprong-game"
+  apiKey:"AIzaSyA8LmWdVyebJSYLmKOseg8UFxZege5buMg",
+  authDomain:"paardensprong-game.firebaseapp.com",
+  projectId:"paardensprong-game"
 });
 const auth=firebase.auth(), db=firebase.firestore();
 
-/* State */
 let uid,lobbyId;
-let cursor=5;
-let lastMini=null;
-
-/* π pincodes */
-const piCodes={
-  1:"141",2:"592",3:"653",
-  4:"589",5:"793",6:"238",
-  7:"462",8:"643",9:"383"
-};
-
 const colors=["white","red","green","blue"];
 const starts=[{x:0,y:0},{x:9,y:0},{x:0,y:9},{x:9,y:9}];
 const map={1:[0,0],2:[1,0],3:[2,0],4:[0,1],5:[1,1],6:[2,1],7:[0,2],8:[1,2],9:[2,2]};
+let cursor=5;
 
 function show(id){
   document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
   document.getElementById(id).classList.add("active");
 }
 
-/* Auth */
 function login(){
   auth.signInWithEmailAndPassword(email.value,password.value)
-   .catch(()=>auth.createUserWithEmailAndPassword(email.value,password.value));
+    .catch(()=>auth.createUserWithEmailAndPassword(email.value,password.value));
 }
+
 function logout(){
   auth.signOut();
   sessionStorage.clear();
   show("login");
 }
+
 auth.onAuthStateChanged(u=>{
-  if(u){
-    uid=u.uid;
-    userInfo.innerText=`Ingelogd: ${u.email}`;
-    lobbyId=sessionStorage.getItem("lobbyId");
-    lobbyId?listenLobby():show("lobby");
-  }
+  if(!u) return show("login");
+  uid=u.uid;
+  userInfo.innerText=`Ingelogd als ${u.email}`;
+  const urlLobby=new URLSearchParams(location.search).get("lobby");
+  lobbyId=urlLobby||sessionStorage.getItem("lobbyId");
+  lobbyId?joinExistingLobby():show("lobby");
 });
 
-/* Lobby */
 async function createLobby(){
   const ref=db.collection("lobbies").doc();
   lobbyId=ref.id;
   sessionStorage.setItem("lobbyId",lobbyId);
   await ref.set({created:Date.now()});
-  joinLobby(true);
+  await joinExistingLobby(true);
 }
-async function joinLobby(host=false){
-  lobbyId=host?lobbyId:code.value;
-  sessionStorage.setItem("lobbyId",lobbyId);
+
+async function joinExistingLobby(host=false){
   const ref=db.collection("lobbies").doc(lobbyId);
   const snap=await ref.collection("players").get();
-  const i=snap.size;
-  await ref.collection("players").doc(uid).set({
-    id:uid,nick:nick.value,
-    x:starts[i].x,y:starts[i].y,
-    color:colors[i],score:0
-  });
-  if(host) spawnSmugglers(ref);
+  if(!snap.docs.find(d=>d.id===uid)){
+    const i=snap.size;
+    await ref.collection("players").doc(uid).set({
+      id:uid,nick:nick.value||"Speler",
+      x:starts[i].x,y:starts[i].y,
+      color:colors[i],score:0
+    });
+  }
+  if(host) await spawnSmugglers(ref);
   listenLobby();
 }
+
 function leaveLobby(){
   db.collection("lobbies").doc(lobbyId).collection("players").doc(uid).delete();
-  sessionStorage.removeItem("lobbyId");
+  sessionStorage.clear();
+  location.search="";
   show("lobby");
 }
 
-/* Game */
-function listenLobby(){
-  show("game");
-  const ref=db.collection("lobbies").doc(lobbyId);
-  ref.collection("players").onSnapshot(render);
-  ref.collection("smugglers").onSnapshot(render);
-}
 async function restartGame(){
   const ref=db.collection("lobbies").doc(lobbyId);
   const p=await ref.collection("players").get();
@@ -190,33 +133,56 @@ async function restartGame(){
   p.forEach(d=>d.ref.update({...starts[i],color:colors[i],score:0})&&i++);
   const s=await ref.collection("smugglers").get();
   s.forEach(d=>d.ref.delete());
-  spawnSmugglers(ref);
+  await spawnSmugglers(ref);
 }
 
-/* Render */
+async function spawnSmugglers(ref){
+  const used=starts.map(p=>`${p.x}_${p.y}`);
+  let i=0;
+  while(i<3){
+    const x=Math.floor(Math.random()*10);
+    const y=Math.floor(Math.random()*10);
+    if(!used.includes(`${x}_${y}`)){
+      await ref.collection("smugglers").doc(`${x}_${y}`).set({x,y});
+      used.push(`${x}_${y}`);
+      i++;
+    }
+  }
+}
+
+function listenLobby(){
+  show("game");
+  const ref=db.collection("lobbies").doc(lobbyId);
+  ref.collection("players").onSnapshot(render);
+  ref.collection("smugglers").onSnapshot(render);
+}
+
 async function render(){
   const ref=db.collection("lobbies").doc(lobbyId);
   const ps=(await ref.collection("players").get()).docs.map(d=>d.data());
   const sm=(await ref.collection("smugglers").get()).docs.map(d=>d.data());
   board.innerHTML="";
   for(let y=0;y<10;y++)for(let x=0;x<10;x++){
-    const c=document.createElement("div"); c.className="cell";
+    const c=document.createElement("div");c.className="cell";
     const p=ps.find(p=>p.x===x&&p.y===y);
-    if(p){
-      c.innerHTML=`<div class="name">${p.nick}</div>
+    if(p)c.innerHTML=`<div class="name">${p.nick}</div>
       <div class="player ${p.id===uid?"me":""}" style="color:${p.color}">♞</div>
       <div class="score">${p.score}</div>`;
-    }
-    if(sm.find(s=>s.x===x&&s.y===y)) c.innerHTML=`<div class="smuggler">♟</div>`;
+    if(sm.find(s=>s.x===x&&s.y===y))c.innerHTML=`<div class="smuggler">♟</div>`;
     board.appendChild(c);
   }
-  gameInfo.innerText=`Lobby: ${lobbyId}`;
+}
+
+function shareLobby(){
+  const link=`${location.origin}${location.pathname}?lobby=${lobbyId}`;
+  const msg=encodeURIComponent(`Doe mee met mijn spel! ${link}`);
+  window.open(`https://wa.me/?text=${msg}`,"_blank");
 }
 
 /* Mini-raster */
 for(let i=1;i<=9;i++){
   const d=document.createElement("div");
-  d.className="mini"; d.innerText=i;
+  d.className="mini";d.innerText=i;
   d.onclick=()=>miniClick(i);
   mini.appendChild(d);
 }
@@ -228,36 +194,22 @@ function updateMini(){
     const dx=map[n][0]-map[cursor][0];
     const dy=map[n][1]-map[cursor][1];
     m.classList.remove("active","possible");
-    if(n===cursor) m.classList.add("active");
-    else if(Math.abs(dx*dy)===2) m.classList.add("possible");
+    if(n===cursor)m.classList.add("active");
+    else if(Math.abs(dx*dy)===2)m.classList.add("possible");
   });
 }
 
 async function miniClick(n){
   const dx=map[n][0]-map[cursor][0];
   const dy=map[n][1]-map[cursor][1];
-  cursor=n; updateMini();
-  if(Math.abs(dx*dy)!==2) return;
+  cursor=n;updateMini();
+  if(Math.abs(dx*dy)!==2)return;
 
-  lastMini=n;
   const ref=db.collection("lobbies").doc(lobbyId).collection("players").doc(uid);
   const p=(await ref.get()).data();
-  await ref.update({x:p.x+dx,y:p.y+dy});
-  bonusMsg.innerText="Voer pincode in voor bonus";
-}
-
-/* Bonus */
-async function checkBonus(){
-  if(!lastMini) return;
-  if(pincode.value===piCodes[lastMini]){
-    const ref=db.collection("lobbies").doc(lobbyId).collection("players").doc(uid);
-    const p=(await ref.get()).data();
-    await ref.update({score:p.score+1});
-    bonusMsg.innerText="✅ Bonus verdiend!";
-  } else {
-    bonusMsg.innerText="❌ Verkeerde pincode";
-  }
-  pincode.value="";
+  const nx=Math.max(0,Math.min(9,p.x+dx));
+  const ny=Math.max(0,Math.min(9,p.y+dy));
+  await ref.update({x:nx,y:ny});
 }
 </script>
 </body>
