@@ -30,6 +30,7 @@ button,input{padding:8px;margin:4px}
 
 <body>
 
+<!-- LOGIN -->
 <div id="login" class="screen active">
   <h2>Login</h2>
   <input id="email" placeholder="email">
@@ -37,14 +38,22 @@ button,input{padding:8px;margin:4px}
   <button onclick="login()">Login / Registreer</button>
 </div>
 
+<!-- NICKNAME -->
+<div id="nickScreen" class="screen">
+  <h2>Kies je nickname</h2>
+  <input id="nick" placeholder="nickname">
+  <button onclick="confirmNick()">Verder</button>
+</div>
+
+<!-- LOBBY -->
 <div id="lobby" class="screen">
   <h2>Lobby</h2>
   <div id="userInfo"></div>
-  <input id="nick" placeholder="nickname">
   <button onclick="createLobby()">Maak lobby</button>
   <button onclick="logout()">Uitloggen</button>
 </div>
 
+<!-- GAME -->
 <div id="game" class="screen">
   <div id="gameInfo"></div>
   <button onclick="restartGame()">🔄 Herstart</button>
@@ -65,7 +74,7 @@ firebase.initializeApp({
 });
 const auth=firebase.auth(), db=firebase.firestore();
 
-let uid,lobbyId;
+let uid,lobbyId,nickname="";
 const colors=["white","red","green","blue"];
 const starts=[{x:0,y:0},{x:9,y:0},{x:0,y:9},{x:9,y:9}];
 const map={1:[0,0],2:[1,0],3:[2,0],4:[0,1],5:[1,1],6:[2,1],7:[0,2],8:[1,2],9:[2,2]};
@@ -84,6 +93,7 @@ function login(){
 function logout(){
   auth.signOut();
   sessionStorage.clear();
+  location.search="";
   show("login");
 }
 
@@ -91,32 +101,40 @@ auth.onAuthStateChanged(u=>{
   if(!u) return show("login");
   uid=u.uid;
   userInfo.innerText=`Ingelogd als ${u.email}`;
-  const urlLobby=new URLSearchParams(location.search).get("lobby");
-  lobbyId=urlLobby||sessionStorage.getItem("lobbyId");
-  lobbyId?joinExistingLobby():show("lobby");
+  lobbyId=new URLSearchParams(location.search).get("lobby");
+  show("nickScreen");
 });
+
+function confirmNick(){
+  nickname=nick.value.trim();
+  if(!nickname) return alert("Nickname verplicht");
+  lobbyId ? joinLobbyByLink() : show("lobby");
+}
 
 async function createLobby(){
   const ref=db.collection("lobbies").doc();
   lobbyId=ref.id;
-  sessionStorage.setItem("lobbyId",lobbyId);
+  history.replaceState({}, "", "?lobby="+lobbyId);
   await ref.set({created:Date.now()});
-  await joinExistingLobby(true);
+  await addPlayer(ref);
+  await spawnSmugglers(ref);
+  listenLobby();
 }
 
-async function joinExistingLobby(host=false){
+async function joinLobbyByLink(){
   const ref=db.collection("lobbies").doc(lobbyId);
-  const snap=await ref.collection("players").get();
-  if(!snap.docs.find(d=>d.id===uid)){
-    const i=snap.size;
-    await ref.collection("players").doc(uid).set({
-      id:uid,nick:nick.value||"Speler",
-      x:starts[i].x,y:starts[i].y,
-      color:colors[i],score:0
-    });
-  }
-  if(host) await spawnSmugglers(ref);
+  await addPlayer(ref);
   listenLobby();
+}
+
+async function addPlayer(ref){
+  const snap=await ref.collection("players").get();
+  const i=snap.size;
+  await ref.collection("players").doc(uid).set({
+    id:uid,nick:nickname,
+    x:starts[i].x,y:starts[i].y,
+    color:colors[i],score:0
+  });
 }
 
 function leaveLobby(){
@@ -137,16 +155,12 @@ async function restartGame(){
 }
 
 async function spawnSmugglers(ref){
-  const used=starts.map(p=>`${p.x}_${p.y}`);
   let i=0;
   while(i<3){
     const x=Math.floor(Math.random()*10);
     const y=Math.floor(Math.random()*10);
-    if(!used.includes(`${x}_${y}`)){
-      await ref.collection("smugglers").doc(`${x}_${y}`).set({x,y});
-      used.push(`${x}_${y}`);
-      i++;
-    }
+    await ref.collection("smugglers").doc(`${x}_${y}`).set({x,y});
+    i++;
   }
 }
 
@@ -168,18 +182,13 @@ async function render(){
     if(p)c.innerHTML=`<div class="name">${p.nick}</div>
       <div class="player ${p.id===uid?"me":""}" style="color:${p.color}">♞</div>
       <div class="score">${p.score}</div>`;
-    if(sm.find(s=>s.x===x&&s.y===y))c.innerHTML=`<div class="smuggler">♟</div>`;
+    const s=sm.find(s=>s.x===x&&s.y===y);
+    if(s)c.innerHTML=`<div class="smuggler">♟</div>`;
     board.appendChild(c);
   }
 }
 
-function shareLobby(){
-  const link=`${location.origin}${location.pathname}?lobby=${lobbyId}`;
-  const msg=encodeURIComponent(`Doe mee met mijn spel! ${link}`);
-  window.open(`https://wa.me/?text=${msg}`,"_blank");
-}
-
-/* Mini-raster */
+/* MINI RASTER */
 for(let i=1;i<=9;i++){
   const d=document.createElement("div");
   d.className="mini";d.innerText=i;
@@ -205,11 +214,25 @@ async function miniClick(n){
   cursor=n;updateMini();
   if(Math.abs(dx*dy)!==2)return;
 
-  const ref=db.collection("lobbies").doc(lobbyId).collection("players").doc(uid);
-  const p=(await ref.get()).data();
-  const nx=Math.max(0,Math.min(9,p.x+dx));
-  const ny=Math.max(0,Math.min(9,p.y+dy));
-  await ref.update({x:nx,y:ny});
+  const ref=db.collection("lobbies").doc(lobbyId);
+  const pRef=ref.collection("players").doc(uid);
+  const p=(await pRef.get()).data();
+  let nx=Math.max(0,Math.min(9,p.x+dx));
+  let ny=Math.max(0,Math.min(9,p.y+dy));
+
+  const sRef=ref.collection("smugglers").doc(`${nx}_${ny}`);
+  const s=await sRef.get();
+  let score=p.score;
+  if(s.exists){
+    await sRef.delete();
+    score++;
+  }
+  await pRef.update({x:nx,y:ny,score});
+}
+
+function shareLobby(){
+  const link=`${location.origin}${location.pathname}?lobby=${lobbyId}`;
+  window.open(`https://wa.me/?text=${encodeURIComponent("Doe mee: "+link)}`);
 }
 </script>
 </body>
