@@ -1,316 +1,267 @@
 <!DOCTYPE html>
 <html lang="nl">
 <head>
-<meta charset="UTF-8">
+<meta charset="UTF-8" />
 <title>Paardenspel – Multiplayer</title>
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0" />
 
-<!-- Firebase -->
+<!-- Firebase compat SDKs -->
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
 <style>
 body {
-  margin:0;
-  font-family: system-ui, sans-serif;
-  background:#111;
-  color:white;
+  margin: 0;
+  font-family: sans-serif;
+  background: #1e1e1e;
+  color: white;
 }
 
 .screen { display:none; padding:20px; }
 .active { display:block; }
 
 input, button {
-  padding:8px;
-  margin:4px;
+  padding:10px;
+  margin:5px 0;
   font-size:16px;
 }
 
 button { cursor:pointer; }
 
-#topBar {
-  display:flex;
-  justify-content:space-between;
-  align-items:center;
-  margin-bottom:10px;
-  gap:10px;
-}
-
 #boardWrapper {
-  position:relative;
-  width:420px;
+  position: relative;
+  width: 420px;
+  height: 420px;
+  margin-top: 10px;
 }
 
 #boardBg {
-  position:absolute;
-  inset:0;
-  background:url("Venetia Square.png") center/cover no-repeat;
-  opacity:0.35;
-  z-index:0;
+  position: absolute;
+  inset: 0;
+  background-image: url("Venetia Square.png");
+  background-size: cover;
+  background-position: center;
+  opacity: 0.45;
+  z-index: 0;
+  border-radius: 6px;
 }
 
 #board {
-  position:relative;
-  z-index:1;
-  display:grid;
-  grid-template-columns:repeat(10,40px);
-  grid-template-rows:repeat(10,40px);
-  gap:2px;
+  position: relative;
+  z-index: 1;
+  display: grid;
+  grid-template-columns: repeat(10, 40px);
+  grid-template-rows: repeat(10, 40px);
+  gap: 2px;
+  width: 420px;
+  height: 420px;
 }
 
 .cell {
-  width:40px;
-  height:40px;
-  background:rgba(0,0,0,0.4);
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  position:relative;
+  width: 40px;
+  height: 40px;
+  background: rgba(0,0,0,0.25);              /* 🔥 doorschijnen */
+  border: 1px solid rgba(255,255,255,0.1);  /* ✨ licht randje */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 22px;
+  box-sizing: border-box;
 }
 
-.piece {
-  display:flex;
-  flex-direction:column;
-  align-items:center;
-  animation: pop 0.2s ease;
+.player {
+  font-weight: bold;
 }
 
-.me { filter: drop-shadow(0 0 6px #0ff); }
-
-.name {
-  font-size:10px;
-  line-height:10px;
-}
-
-.score {
-  font-size:9px;
-  opacity:0.8;
-}
-
-@keyframes pop {
-  from { transform:scale(0.7); }
-  to { transform:scale(1); }
-}
-
-/* Mini raster */
-#mini {
-  display:grid;
-  grid-template-columns:repeat(3,50px);
-  grid-template-rows:repeat(3,50px);
-  gap:4px;
-  margin-top:15px;
-}
-
-.mini {
-  background:#333;
-  display:flex;
-  align-items:center;
-  justify-content:center;
-  font-size:18px;
-  cursor:pointer;
-}
-
-.mini.active { background:#0a5; }
-.mini.valid { background:#2aa; }
-
-/* Bonus lock */
-#lock {
-  display:flex;
-  gap:10px;
-  align-items:center;
-  margin-top:10px;
-}
-
-select {
-  font-size:18px;
-  padding:5px;
+.smuggler {
+  color: gold;
+  font-weight: bold;
 }
 </style>
 </head>
+
 <body>
 
+<!-- LOGIN -->
 <div id="loginScreen" class="screen active">
   <h2>Login</h2>
-  <input id="email" placeholder="E-mail">
-  <input id="password" type="password" placeholder="Wachtwoord">
-  <button onclick="login()">Login / Registreer</button>
+  <input id="email" type="email" placeholder="E-mail" />
+  <input id="password" type="password" placeholder="Wachtwoord" />
+  <button id="loginBtn">Inloggen / Registreren</button>
 </div>
 
+<!-- LOBBY -->
 <div id="lobbyScreen" class="screen">
   <h2>Lobby</h2>
-  <div id="userInfo"></div>
-  <input id="nickname" placeholder="Nickname">
-  <button onclick="createLobby()">Maak lobby</button><br>
-  <input id="lobbyCode" placeholder="Lobbycode">
-  <button onclick="joinLobby()">Join lobby</button>
+  <div id="currentUserInfo"></div>
+  <input id="nickname" placeholder="Nickname" />
+  <button id="createLobby">Maak lobby</button>
+  <hr>
+  <input id="lobbyCode" placeholder="Lobby code" />
+  <button id="joinLobby">Join lobby</button>
 </div>
 
+<!-- GAME -->
 <div id="gameScreen" class="screen">
-  <div id="topBar">
-    <div id="gameInfo"></div>
-    <div>
-      <button onclick="restartGame()">🔁 Herstart</button>
-      <button onclick="leaveLobby()">🚪 Verlaat lobby</button>
-      <button onclick="logout()">🔓 Uitloggen</button>
-    </div>
-  </div>
+  <h2 id="gameTitle">Paardenspel</h2>
+  <div id="gameInfo"></div>
+
+  <button id="restartBtn">Herstart</button>
 
   <div id="boardWrapper">
     <div id="boardBg"></div>
     <div id="board"></div>
   </div>
 
-  <h3>Mini-raster</h3>
-  <div id="mini"></div>
-
-  <h3>Bonus – π-slot</h3>
-  <div id="lock">
-    <select id="d1"></select>
-    <select id="d2"></select>
-    <select id="d3"></select>
-    <button onclick="unlockBonus()">Ontgrendel</button>
+  <div style="margin-top:10px;">
+    <p>Paardensprong invoer (mini-raster):</p>
+    <input id="step1" size="1" placeholder="1-9">
+    →
+    <input id="step2" size="1" placeholder="1-9">
+    <button id="moveBtn">Spring</button>
   </div>
 </div>
 
 <script>
-/* ================= FIREBASE ================= */
-firebase.initializeApp({
+const firebaseConfig = {
   apiKey: "AIzaSyA8LmWdVyebJSYLmKOseg8UFxZege5buMg",
   authDomain: "paardensprong-game.firebaseapp.com",
   projectId: "paardensprong-game",
-});
+  storageBucket: "paardensprong-game.appspot.com",
+  messagingSenderId: "815440447520",
+  appId: "1:815440447520:web:72569450503b4e77b85445"
+};
+
+firebase.initializeApp(firebaseConfig);
 const auth = firebase.auth();
 const db = firebase.firestore();
 
-/* ================= STATE ================= */
-let user, lobbyId, cursor = 5;
-let players=[], smugglers=[];
-const pi="141592653589793238462643383279";
+const screens = {
+  login: loginScreen,
+  lobby: lobbyScreen,
+  game: gameScreen
+};
 
-/* ================= UI ================= */
-const screens={login:loginScreen,lobby:lobbyScreen,game:gameScreen};
-function show(s){Object.values(screens).forEach(x=>x.classList.remove("active"));screens[s].classList.add("active");}
-
-/* ================= AUTH ================= */
-function login(){
-  auth.signInWithEmailAndPassword(email.value,password.value)
-  .catch(()=>auth.createUserWithEmailAndPassword(email.value,password.value));
+function show(name){
+  Object.values(screens).forEach(s => s.classList.remove("active"));
+  screens[name].classList.add("active");
 }
 
-auth.onAuthStateChanged(u=>{
-  if(!u){show("login");return;}
-  user=u;
-  userInfo.innerText="Ingelogd als "+u.email;
-  show("lobby");
+let currentLobbyId = sessionStorage.getItem("currentLobbyId");
+let currentPlayerId = null;
+let boardState = { players: [], smugglers: [] };
+
+const playerColors = ["white","red","green","blue"];
+const startPositions = [
+  {x:0,y:0},{x:9,y:0},{x:0,y:9},{x:9,y:9}
+];
+
+loginBtn.onclick = () => {
+  const e = email.value;
+  const p = password.value;
+  auth.signInWithEmailAndPassword(e,p)
+    .catch(()=>auth.createUserWithEmailAndPassword(e,p));
+};
+
+auth.onAuthStateChanged(user=>{
+  if(!user){ show("login"); return; }
+  currentPlayerId = user.uid;
+  currentUserInfo.innerText = "Ingelogd als: " + user.email;
+  currentLobbyId ? listenLobby(currentLobbyId) : show("lobby");
 });
 
-/* ================= LOBBY ================= */
-async function createLobby(){
-  const ref=await db.collection("lobbies").add({});
-  lobbyId=ref.id;
-  await joinLobbyId(lobbyId);
-  alert("Lobbycode: "+lobbyId);
-}
-
-async function joinLobby(){
-  await joinLobbyId(lobbyCode.value);
-}
-
-async function joinLobbyId(id){
-  lobbyId=id;
-  await db.collection("lobbies").doc(id)
-    .collection("players").doc(user.uid)
-    .set({id:user.uid,nickname:nickname.value,x:0,y:0,score:0},{merge:true});
-  listen();
-  show("game");
-}
-
-/* ================= GAME ================= */
-function listen(){
-  db.collection("lobbies").doc(lobbyId).collection("players")
-    .onSnapshot(s=>{players=s.docs.map(d=>d.data());render();});
-  db.collection("lobbies").doc(lobbyId).collection("smugglers")
-    .onSnapshot(s=>{smugglers=s.docs.map(d=>d.data());render();});
-}
-
-function render(){
-  board.innerHTML="";
-  for(let y=0;y<10;y++)for(let x=0;x<10;x++){
-    const c=document.createElement("div");c.className="cell";
-    const p=players.find(p=>p.x===x&&p.y===y);
-    if(p){
-      const d=document.createElement("div");
-      d.className="piece"+(p.id===user.uid?" me":"");
-      d.style.color=p.color||"lime";
-      d.innerHTML=`<div class="name">${p.nickname}</div>♞<div class="score">${p.score}</div>`;
-      c.appendChild(d);
-    }
-    board.appendChild(c);
-  }
-  gameInfo.innerText="Lobby "+lobbyId+" | Spelers: "+players.map(p=>p.nickname).join(", ");
-}
-
-/* ================= MINI RASTER ================= */
-const knight=[[1,2],[2,1],[-1,2],[-2,1],[1,-2],[2,-1],[-1,-2],[-2,-1]];
-function buildMini(){
-  mini.innerHTML="";
-  for(let i=1;i<=9;i++){
-    const d=document.createElement("div");
-    d.className="mini"+(i===cursor?" active":"");
-    d.innerText=i;
-    d.onclick=()=>selectMini(i);
-    mini.appendChild(d);
-  }
-}
-function selectMini(i){
-  const ax=(cursor-1)%3, ay=Math.floor((cursor-1)/3);
-  const bx=(i-1)%3, by=Math.floor((i-1)/3);
-  const dx=bx-ax, dy=by-ay;
-  if(knight.some(k=>k[0]===dx&&k[1]===dy)){
-    move(dx,dy);
-  }
-  cursor=i;
-  buildMini();
-}
-
-/* ================= MOVE ================= */
-async function move(dx,dy){
-  const me=players.find(p=>p.id===user.uid);
-  let nx=Math.max(0,Math.min(9,me.x+dx));
-  let ny=Math.max(0,Math.min(9,me.y+dy));
-  let score=me.score;
-  const s=smugglers.find(s=>s.x===nx&&s.y===ny);
-  if(s){
-    await db.collection("lobbies").doc(lobbyId)
-      .collection("smugglers").doc(s.id).delete();
-    score++;
-  }
-  await db.collection("lobbies").doc(lobbyId)
-    .collection("players").doc(user.uid)
-    .update({x:nx,y:ny,score});
-}
-
-/* ================= BONUS ================= */
-for(let i=0;i<3;i++)for(let n=0;n<10;n++){
-  ["d1","d2","d3"].forEach(id=>{
-    const o=document.createElement("option");o.value=n;o.text=n;
-    document.getElementById(id).appendChild(o);
+createLobby.onclick = async()=>{
+  const nick = nickname.value.trim();
+  if(!nick) return alert("Nickname nodig");
+  const ref = db.collection("lobbies").doc();
+  currentLobbyId = ref.id;
+  sessionStorage.setItem("currentLobbyId",currentLobbyId);
+  await ref.set({created: Date.now()});
+  const index = 0;
+  await ref.collection("players").doc(currentPlayerId).set({
+    id: currentPlayerId,
+    nickname: nick,
+    x: startPositions[index].x,
+    y: startPositions[index].y,
+    color: playerColors[index],
+    score: 0
   });
-}
-function unlockBonus(){
-  const code=d1.value+d2.value+d3.value;
-  const target=pi.substr((cursor-1)*3,3);
-  if(code===target) alert("Bonus vrijgespeeld!");
-  else alert("Foute code");
+  await spawnSmugglers(ref);
+  listenLobby(currentLobbyId);
+};
+
+joinLobby.onclick = async()=>{
+  const code = lobbyCode.value.trim();
+  const nick = nickname.value.trim();
+  if(!code || !nick) return;
+  currentLobbyId = code;
+  sessionStorage.setItem("currentLobbyId",code);
+  const ref = db.collection("lobbies").doc(code);
+  const snap = await ref.collection("players").get();
+  const index = snap.size;
+  await ref.collection("players").doc(currentPlayerId).set({
+    id: currentPlayerId,
+    nickname: nick,
+    x: startPositions[index].x,
+    y: startPositions[index].y,
+    color: playerColors[index],
+    score: 0
+  });
+  listenLobby(code);
+};
+
+function listenLobby(id){
+  show("game");
+  db.collection("lobbies").doc(id).collection("players")
+    .onSnapshot(s=>{
+      boardState.players = s.docs.map(d=>d.data());
+      draw();
+      updateInfo();
+    });
+  db.collection("lobbies").doc(id).collection("smugglers")
+    .onSnapshot(s=>{
+      boardState.smugglers = s.docs.map(d=>d.data());
+      draw();
+    });
 }
 
-/* ================= CONTROLS ================= */
-function restartGame(){location.reload();}
-function leaveLobby(){show("lobby");}
-function logout(){auth.signOut();}
+function draw(){
+  board.innerHTML="";
+  for(let y=0;y<10;y++){
+    for(let x=0;x<10;x++){
+      const c = document.createElement("div");
+      c.className="cell";
+      const p = boardState.players.find(p=>p.x===x && p.y===y);
+      const s = boardState.smugglers.find(s=>s.x===x && s.y===y);
+      if(p){
+        const e = document.createElement("span");
+        e.textContent="♞";
+        e.style.color=p.color;
+        c.appendChild(e);
+      } else if(s){
+        c.textContent="♟";
+        c.classList.add("smuggler");
+      }
+      board.appendChild(c);
+    }
+  }
+}
 
-buildMini();
+function updateInfo(){
+  gameInfo.innerHTML =
+    "<b>Lobby:</b> " + currentLobbyId + "<br>" +
+    "<b>Spelers:</b> " + boardState.players.map(p=>p.nickname).join(", ");
+}
+
+async function spawnSmugglers(ref){
+  for(let i=0;i<3;i++){
+    await ref.collection("smugglers").add({
+      x: Math.floor(Math.random()*10),
+      y: Math.floor(Math.random()*10)
+    });
+  }
+}
 </script>
 </body>
 </html>
