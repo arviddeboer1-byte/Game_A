@@ -321,23 +321,33 @@ document.getElementById("unlockBtn").onclick = async () => {
   bonusMessage.className = "";
   bonusMessage.innerText = "";
 
-  if (input === correct) {
-    bonusMessage.innerText = "🔓 Bonus ontgrendeld! +5 punten";
-    bonusMessage.classList.add("success");
+ const playerRef = db.collection("lobbies")
+  .doc(lobbyId)
+  .collection("players")
+  .doc(uid);
 
-    const ref = db.collection("lobbies")
-      .doc(lobbyId)
-      .collection("players")
-      .doc(uid);
+const p = (await playerRef.get()).data();
 
-    const p = (await ref.get()).data();
-    await ref.update({ score: p.score + 5 });
+// Check: bonus al gebruikt voor dit mini-vak?
+if(p.usedBonus && p.usedBonus[cursor]){
+  bonusMessage.innerText = "🔒 Deze kluis is al geopend";
+  bonusMessage.style.color = "orange";
+  return;
+}
 
-  } else {
-    bonusMessage.innerText = "❌ Verkeerde code";
-    bonusMessage.classList.add("fail");
-  }
-};
+if(val.join("") === correct){
+  bonusMessage.innerText = "🎉 Kluis geopend!";
+  bonusMessage.style.color = "lime";
+
+  await playerRef.update({
+    vaults: (p.vaults || 0) + 1,
+    [`usedBonus.${cursor}`]: true
+  });
+
+} else {
+  bonusMessage.innerText = "❌ Verkeerde code";
+  bonusMessage.style.color = "red";
+}
 
 
 function shareLobby(){
