@@ -46,6 +46,15 @@ button,input{padding:8px;margin:4px}
   transform: scale(1.1);
 }
 
+#vaultCounter {
+  margin-left: 10px;
+  font-size: 18px;
+  font-weight: bold;
+  color: gold;
+  min-width: 60px;
+}  
+
+  
 #unlockBtn {
   background: #2a6cff;
   color: white;
@@ -127,12 +136,14 @@ button,input{padding:8px;margin:4px}
   <div id="mini"></div>
 
   <h3>Bonus-pincode</h3>
-  <div id="bonusContainer">
-    <input type="number" class="bonusRoller" id="roll1" min="0" max="9" value="0">
-    <input type="number" class="bonusRoller" id="roll2" min="0" max="9" value="0">
-    <input type="number" class="bonusRoller" id="roll3" min="0" max="9" value="0">
-    <button id="unlockBtn">Ontgrendel</button>
-  </div>
+<div id="bonusContainer">
+  <input type="number" class="bonusRoller" id="roll1" min="0" max="9" value="0">
+  <input type="number" class="bonusRoller" id="roll2" min="0" max="9" value="0">
+  <input type="number" class="bonusRoller" id="roll3" min="0" max="9" value="0">
+  <button id="unlockBtn">Ontgrendel</button>
+  <div id="vaultCounter">🔒 0</div>
+</div>
+
 
   <div id="bonusMessage"></div>
 </div>
