@@ -398,12 +398,26 @@ await playerRef.update({
 }
 };
 
+  
 <div id="end" class="screen">
   <h2>🏁 Spel afgelopen</h2>
   <div id="finalScores"></div>
   <h3 id="winner"></h3>
   <button onclick="location.reload()">Nieuw spel</button>
 </div>
+  
+function showEndScreen(players){
+  show("end");
+
+  players.sort((a,b)=>b.score - a.score);
+
+  finalScores.innerHTML = players
+    .map(p=>`<div>${p.nick}: ${p.score}</div>`)
+    .join("");
+
+  const w = players[0];
+  winner.innerText = `🏆 WINNAAR: ${w.nick} (${w.score})`;
+}
 
 
   
