@@ -209,11 +209,20 @@ async function joinLobbyByLink(){
 async function addPlayer(ref){
   const snap=await ref.collection("players").get();
   const i=snap.size;
-  await ref.collection("players").doc(uid).set({
-    id:uid,nick:nickname,
-    x:starts[i].x,y:starts[i].y,
-    color:colors[i],score:0
-  });
+
+await ref.collection("players").doc(uid).set({
+  id: uid,
+  nick: nickname,
+  x: starts[i].x,
+  y: starts[i].y,
+  color: colors[i],
+  score: 0,
+  vaults: 0,
+  usedBonus: {}
+});
+  
+
+  
 }
 
 function leaveLobby(){
@@ -335,7 +344,7 @@ if(p.usedBonus && p.usedBonus[cursor]){
   return;
 }
 
-if(val.join("") === correct){
+if(input === correct){
   bonusMessage.innerText = "🎉 Kluis geopend!";
   bonusMessage.style.color = "lime";
 
@@ -348,7 +357,7 @@ if(val.join("") === correct){
   bonusMessage.innerText = "❌ Verkeerde code";
   bonusMessage.style.color = "red";
 }
-
+};
 
 function shareLobby(){
   const link=`${location.origin}${location.pathname}?lobby=${lobbyId}`;
