@@ -328,12 +328,23 @@ async function miniClick(n){
 
   const sRef=ref.collection("smugglers").doc(`${nx}_${ny}`);
   const s=await sRef.get();
-  let score=p.score;
-  if(s.exists){
-    await sRef.delete();
-    score++;
-  }
-  await pRef.update({x:nx,y:ny,score});
+  let smugglers = p.smugglers || 0;
+
+if(s.exists){
+  await sRef.delete();
+  smugglers++;
+}
+
+const vaults = p.vaults || 0;
+const score = smugglers * vaults;
+
+await pRef.update({
+  x: nx,
+  y: ny,
+  smugglers,
+  score
+});
+
 }
 
 /* BONUS PINCODE */
