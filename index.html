@@ -54,7 +54,6 @@ button,input{padding:8px;margin:4px}
   min-width: 60px;
 }  
 
-  
 #unlockBtn {
   background: #2a6cff;
   color: white;
@@ -93,8 +92,6 @@ button,input{padding:8px;margin:4px}
   75% { transform: translateX(-4px); }
   100% { transform: translateX(0); }
 }
-
-  
 </style>
 </head>
 
@@ -144,8 +141,15 @@ button,input{padding:8px;margin:4px}
   <div id="vaultCounter">🔒 0</div>
 </div>
 
+<div id="bonusMessage"></div>
+</div>
 
-  <div id="bonusMessage"></div>
+<!-- END SCREEN: verplaatst naar buiten script -->
+<div id="end" class="screen">
+  <h2>🏁 Spel afgelopen</h2>
+  <div id="finalScores"></div>
+  <h3 id="winner"></h3>
+  <button onclick="location.reload()">Nieuw spel</button>
 </div>
 
 <script>
@@ -162,14 +166,13 @@ const starts=[{x:0,y:0},{x:9,y:0},{x:0,y:9},{x:9,y:9}];
 const map={1:[0,0],2:[1,0],3:[2,0],4:[0,1],5:[1,1],6:[2,1],7:[0,2],8:[1,2],9:[2,2]};
 let cursor=5;
 
-// PI-decimalen (voorbeeld: eerste 27 decimalen voor 9 minivlakken)
+// PI-decimalen
 const piCodes = [
   "141","592","653",
   "589","793","238",
   "462","643","383"
 ];
-// raster 1-9
-  
+
 function show(id){
   document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
   document.getElementById(id).classList.add("active");
@@ -221,19 +224,17 @@ async function addPlayer(ref){
   const snap=await ref.collection("players").get();
   const i=snap.size;
 
-await ref.collection("players").doc(uid).set({
-  id: uid,
-  nick: nickname,
-  x: starts[i].x,
-  y: starts[i].y,
-  color: colors[i],
-  score: 0,
-  vaults: 0,
-  usedBonus: {}
-});
-  
-
-  
+  await ref.collection("players").doc(uid).set({
+    id: uid,
+    nick: nickname,
+    x: starts[i].x,
+    y: starts[i].y,
+    color: colors[i],
+    smugglers: 0,
+    vaults: 0,
+    score: 0,
+    usedBonus: {}
+  });
 }
 
 function leaveLobby(){
@@ -247,7 +248,7 @@ async function restartGame(){
   const ref=db.collection("lobbies").doc(lobbyId);
   const p=await ref.collection("players").get();
   let i=0;
-  p.forEach(d=>d.ref.update({...starts[i],color:colors[i],score:0})&&i++);
+  p.forEach(d=>d.ref.update({...starts[i],color:colors[i],smugglers:0,score:0,vaults:0,usedBonus:{}})&&i++);
   const s=await ref.collection("smugglers").get();
   s.forEach(d=>d.ref.delete());
   await spawnSmugglers(ref);
@@ -286,17 +287,15 @@ async function render(){
     board.appendChild(c);
   }
 
-const me = ps.find(p => p.id === uid);
-if (me) {
-  document.getElementById("vaultCounter").innerText =
-    "🔒 " + (me.vaults || 0);
-}
+  const me = ps.find(p => p.id === uid);
+  if (me) {
+    document.getElementById("vaultCounter").innerText =
+      "🔒 " + (me.vaults || 0);
+  }
 
-if(sm.length === 0){
-  showEndScreen(ps);
-}
-
-  
+  if(sm.length === 0){
+    showEndScreen(ps);
+  }
 }
 
 /* MINI RASTER */
@@ -335,21 +334,20 @@ async function miniClick(n){
   const s=await sRef.get();
   let smugglers = p.smugglers || 0;
 
-if(s.exists){
-  await sRef.delete();
-  smugglers++;
-}
+  if(s.exists){
+    await sRef.delete();
+    smugglers++;
+  }
 
-const vaults = p.vaults || 0;
-const score = smugglers * vaults;
+  const vaults = p.vaults || 0;
+  const score = smugglers * vaults;
 
-await pRef.update({
-  x: nx,
-  y: ny,
-  smugglers,
-  score
-});
-
+  await pRef.update({
+    x: nx,
+    y: ny,
+    smugglers,
+    score
+  });
 }
 
 /* BONUS PINCODE */
@@ -364,48 +362,39 @@ document.getElementById("unlockBtn").onclick = async () => {
   bonusMessage.className = "";
   bonusMessage.innerText = "";
 
- const playerRef = db.collection("lobbies")
-  .doc(lobbyId)
-  .collection("players")
-  .doc(uid);
+  const playerRef = db.collection("lobbies")
+    .doc(lobbyId)
+    .collection("players")
+    .doc(uid);
 
-const p = (await playerRef.get()).data();
+  const p = (await playerRef.get()).data();
 
-// Check: bonus al gebruikt voor dit mini-vak?
-if(p.usedBonus && p.usedBonus[cursor]){
-  bonusMessage.innerText = "🔒 Deze kluis is al geopend";
-  bonusMessage.style.color = "orange";
-  return;
-}
+  // Check: bonus al gebruikt voor dit mini-vak?
+  if(p.usedBonus && p.usedBonus[cursor]){
+    bonusMessage.innerText = "🔒 Deze kluis is al geopend";
+    bonusMessage.style.color = "orange";
+    return;
+  }
 
-if(input === correct){
-  bonusMessage.innerText = "🎉 Kluis geopend!";
-  bonusMessage.style.color = "lime";
+  if(input === correct){
+    bonusMessage.innerText = "🎉 Kluis geopend!";
+    bonusMessage.style.color = "lime";
 
-const newVaults = (p.vaults || 0) + 1;
-const smugglers = p.smugglers || 0;
+    const newVaults = (p.vaults || 0) + 1;
+    const smugglers = p.smugglers || 0;
 
-await playerRef.update({
-  vaults: newVaults,
-  score: smugglers * newVaults,
-  [`usedBonus.${cursor}`]: true
-});
-
-
-} else {
-  bonusMessage.innerText = "❌ Verkeerde code";
-  bonusMessage.style.color = "red";
-}
+    await playerRef.update({
+      vaults: newVaults,
+      score: smugglers * newVaults,
+      [`usedBonus.${cursor}`]: true
+    });
+  } else {
+    bonusMessage.innerText = "❌ Verkeerde code";
+    bonusMessage.style.color = "red";
+  }
 };
 
-  
-<div id="end" class="screen">
-  <h2>🏁 Spel afgelopen</h2>
-  <div id="finalScores"></div>
-  <h3 id="winner"></h3>
-  <button onclick="location.reload()">Nieuw spel</button>
-</div>
-  
+/* EINDSCHERM FUNCTIE */
 function showEndScreen(players){
   show("end");
 
@@ -419,8 +408,6 @@ function showEndScreen(players){
   winner.innerText = `🏆 WINNAAR: ${w.nick} (${w.score})`;
 }
 
-
-  
 function shareLobby(){
   const link=`${location.origin}${location.pathname}?lobby=${lobbyId}`;
   window.open(`https://wa.me/?text=${encodeURIComponent("Doe mee: "+link)}`);
