@@ -377,10 +377,15 @@ if(input === correct){
   bonusMessage.innerText = "🎉 Kluis geopend!";
   bonusMessage.style.color = "lime";
 
-  await playerRef.update({
-    vaults: (p.vaults || 0) + 1,
-    [`usedBonus.${cursor}`]: true
-  });
+const newVaults = (p.vaults || 0) + 1;
+const smugglers = p.smugglers || 0;
+
+await playerRef.update({
+  vaults: newVaults,
+  score: smugglers * newVaults,
+  [`usedBonus.${cursor}`]: true
+});
+
 
 } else {
   bonusMessage.innerText = "❌ Verkeerde code";
