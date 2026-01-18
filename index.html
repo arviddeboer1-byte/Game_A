@@ -310,24 +310,35 @@ async function miniClick(n){
 }
 
 /* BONUS PINCODE */
-document.getElementById("unlockBtn").onclick=async()=>{
-  const val = [
-    document.getElementById("roll1").value,
-    document.getElementById("roll2").value,
-    document.getElementById("roll3").value
-  ];
-  const miniIndex = cursor-1;
-  const correct = piCodes[miniIndex];
-  if(val.join("") === correct){
-    bonusMessage.innerText = "🎉 Bonus ontgrendeld!";
-    // Voeg hier evt. extra punten toe
-    const ref=db.collection("lobbies").doc(lobbyId).collection("players").doc(uid);
-    const p=(await ref.get()).data();
-    await ref.update({score:p.score+5});
+document.getElementById("unlockBtn").onclick = async () => {
+  const r1 = roll1.value;
+  const r2 = roll2.value;
+  const r3 = roll3.value;
+  const input = r1 + r2 + r3;
+
+  const correct = piCodes[cursor - 1];
+
+  bonusMessage.className = "";
+  bonusMessage.innerText = "";
+
+  if (input === correct) {
+    bonusMessage.innerText = "🔓 Bonus ontgrendeld! +5 punten";
+    bonusMessage.classList.add("success");
+
+    const ref = db.collection("lobbies")
+      .doc(lobbyId)
+      .collection("players")
+      .doc(uid);
+
+    const p = (await ref.get()).data();
+    await ref.update({ score: p.score + 5 });
+
   } else {
-    bonusMessage.innerText = "❌ Fout, probeer opnieuw";
+    bonusMessage.innerText = "❌ Verkeerde code";
+    bonusMessage.classList.add("fail");
   }
 };
+
 
 function shareLobby(){
   const link=`${location.origin}${location.pathname}?lobby=${lobbyId}`;
