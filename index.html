@@ -96,8 +96,13 @@ const map={1:[0,0],2:[1,0],3:[2,0],4:[0,1],5:[1,1],6:[2,1],7:[0,2],8:[1,2],9:[2,
 let cursor=5;
 
 // PI-decimalen (voorbeeld: eerste 27 decimalen voor 9 minivlakken)
-const piDecimals=["1","4","1","5","9","2","6","5","3"]; // raster 1-9
-
+const piCodes = [
+  "141","592","653",
+  "589","793","238",
+  "462","643","383"
+];
+// raster 1-9
+  
 function show(id){
   document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
   document.getElementById(id).classList.add("active");
@@ -256,7 +261,7 @@ document.getElementById("unlockBtn").onclick=async()=>{
     document.getElementById("roll3").value
   ];
   const miniIndex = cursor-1;
-  const correct = piDecimals[miniIndex];
+  const correct = piCodes[miniIndex];
   if(val.join("") === correct){
     bonusMessage.innerText = "🎉 Bonus ontgrendeld!";
     // Voeg hier evt. extra punten toe
