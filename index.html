@@ -285,6 +285,13 @@ async function render(){
     if(s)c.innerHTML=`<div class="smuggler">♟</div>`;
     board.appendChild(c);
   }
+
+const me = ps.find(p => p.id === uid);
+if (me) {
+  document.getElementById("vaultCounter").innerText =
+    "🔒 " + (me.vaults || 0);
+}
+  
 }
 
 /* MINI RASTER */
