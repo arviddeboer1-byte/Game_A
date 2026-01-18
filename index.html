@@ -291,6 +291,11 @@ if (me) {
   document.getElementById("vaultCounter").innerText =
     "🔒 " + (me.vaults || 0);
 }
+
+if(sm.length === 0){
+  showEndScreen(ps);
+}
+
   
 }
 
@@ -393,6 +398,15 @@ await playerRef.update({
 }
 };
 
+<div id="end" class="screen">
+  <h2>🏁 Spel afgelopen</h2>
+  <div id="finalScores"></div>
+  <h3 id="winner"></h3>
+  <button onclick="location.reload()">Nieuw spel</button>
+</div>
+
+
+  
 function shareLobby(){
   const link=`${location.origin}${location.pathname}?lobby=${lobbyId}`;
   window.open(`https://wa.me/?text=${encodeURIComponent("Doe mee: "+link)}`);
