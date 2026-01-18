@@ -149,7 +149,7 @@ button,input{padding:8px;margin:4px}
   <h2>🏁 Spel afgelopen</h2>
   <div id="finalScores"></div>
   <h3 id="winner"></h3>
-  <button onclick="location.reload()">Nieuw spel</button>
+  <button onclick="restartAfterEnd()">Nieuw spel</button>
 </div>
 
 <script>
@@ -408,6 +408,36 @@ function showEndScreen(players){
   winner.innerText = `🏆 WINNAAR: ${w.nick} (${w.score})`;
 }
 
+
+async function restartAfterEnd(){
+  const ref = db.collection("lobbies").doc(lobbyId);
+
+  // Reset alle spelers
+  const playersSnap = await ref.collection("players").get();
+  let i = 0;
+  for(const doc of playersSnap.docs){
+    await doc.ref.update({
+      x: starts[i].x,
+      y: starts[i].y,
+      smugglers: 0,
+      vaults: 0,
+      score: 0,
+      usedBonus: {}
+    });
+    i++;
+  }
+
+  // Verwijder alle smokkelaars en spawn nieuwe
+  const smSnap = await ref.collection("smugglers").get();
+  for(const doc of smSnap.docs) await doc.ref.delete();
+  await spawnSmugglers(ref);
+
+  // Terug naar game scherm
+  show("game");
+}
+
+
+  
 function shareLobby(){
   const link=`${location.origin}${location.pathname}?lobby=${lobbyId}`;
   window.open(`https://wa.me/?text=${encodeURIComponent("Doe mee: "+link)}`);
