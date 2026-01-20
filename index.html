@@ -92,6 +92,23 @@ button,input{padding:8px;margin:4px}
   75% { transform: translateX(-4px); }
   100% { transform: translateX(0); }
 }
+
+#boardWrapper {
+  position: relative;
+  display: inline-block;
+  background-image: url("Venetia Square.png");
+  background-size: cover;
+  background-position: center;
+  padding: 6px;
+}
+
+/* het raster zelf blijft transparant */
+#board {
+  position: relative;
+  z-index: 2;
+}
+
+  
 </style>
 </head>
 
@@ -127,7 +144,10 @@ button,input{padding:8px;margin:4px}
   <button onclick="leaveLobby()">🚪 Verlaat lobby</button>
   <button onclick="shareLobby()">📲 Deel via WhatsApp</button>
 
+<div id="boardWrapper">
   <div id="board"></div>
+</div>
+
 
   <h3>Mini-raster</h3>
   <div id="mini"></div>
