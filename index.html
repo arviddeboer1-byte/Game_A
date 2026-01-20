@@ -16,14 +16,17 @@ body{margin:0;background:#1e1e1e;color:white;font-family:sans-serif}
 button,input{padding:8px;margin:4px}
   
 #board {
+  position: relative;
   display: grid;
-  grid-template-columns: repeat(10,40px);
+  grid-template-columns: repeat(10, 40px);
   gap: 2px;
   margin-top: 10px;
 
-  background-color: #1e1e1e; /* kleur rasterlijnen */
-  position: relative;
+  background-color: #1e1e1e; /* KLEUR VAN DE RASTERLIJNEN */
+  overflow: hidden;
 }
+
+/* achtergrondafbeelding ONDER de vakjes */
 #board::before {
   content: "";
   position: absolute;
@@ -38,19 +41,22 @@ button,input{padding:8px;margin:4px}
 
 
 
+
 .cell {
   position: relative;
   z-index: 1;
 
   width: 38px;
   height: 38px;
-  background: transparent;
-  border: 1px solid rgba(0,0,0,0.9);
+
+  background: rgba(68, 68, 68, 0.65); /* doorschijnende vakjes */
+  border: none; /* GEEN RANDEN MEER */
 
   display: flex;
   align-items: center;
   justify-content: center;
 }
+
 
 
 
@@ -136,15 +142,6 @@ button,input{padding:8px;margin:4px}
   display: inline-block;
 }
 
-
-
-#board {
-  display: grid;
-  grid-template-columns: repeat(10,40px);
-  gap: 2px;
-  margin-top: 10px;
-  background-color: #1e1e1e; /* rasterlijnen */
-}
 
 #gameButtons {
   position: fixed;
