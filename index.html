@@ -120,6 +120,22 @@ button,input{padding:8px;margin:4px}
   z-index: 2;
 }
 
+#gameButtons {
+  position: fixed;
+  bottom: 10px;
+  left: 0;
+  width: 100%;
+  display: flex;
+  justify-content: center;
+  gap: 10px;
+  z-index: 100;
+}
+
+#gameButtons button {
+  padding: 10px 14px;
+  font-size: 14px;
+}
+
   
 </style>
 </head>
@@ -152,9 +168,12 @@ button,input{padding:8px;margin:4px}
 <!-- GAME -->
 <div id="game" class="screen">
   <div id="gameInfo"></div>
+<div id="gameButtons">
   <button onclick="restartGame()">🔄 Herstart</button>
   <button onclick="leaveLobby()">🚪 Verlaat lobby</button>
   <button onclick="shareLobby()">📲 Deel via WhatsApp</button>
+</div>
+
 
 <div id="boardWrapper">
   <div id="board"></div>
