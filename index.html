@@ -15,12 +15,23 @@
 
 html, body {
   width: 100%;
+  margin: 0;
+  padding: 0;
   overflow-x: hidden;
 }
-
   
 body{margin:0;background:#1e1e1e;color:white;font-family:sans-serif}
+
 .screen{display:none;padding:20px}
+
+@media (max-width: 600px) {
+  .screen {
+    padding: 0;   /* GEEN RANDEN OP MOBIEL */
+  }
+}
+
+
+  
 .active{display:block}
 button,input{padding:8px;margin:4px}
   
@@ -180,10 +191,17 @@ button,input{padding:8px;margin:4px}
 
 @media (max-width: 600px) {
 
+  #boardWrapper {
+    width: 100vw;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
   #board {
-    width: 100%;
+    width: 100vw;
     grid-template-columns: repeat(10, 1fr);
-    gap: 2px;
+    gap: 1px;
   }
 
   .cell {
