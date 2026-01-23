@@ -195,11 +195,16 @@ button,input{padding:8px;margin:4px}
 <!-- GAME -->
 <div id="game" class="screen">
   <div id="gameInfo"></div>
+
+
+
 <div id="gameButtons">
+  <button onclick="startGame()">🖥 Fullscreen</button>
   <button onclick="restartGame()">🔄 Herstart</button>
   <button onclick="leaveLobby()">🚪 Verlaat lobby</button>
   <button onclick="shareLobby()">📲 Deel via WhatsApp</button>
 </div>
+
 
 
 <div id="boardWrapper">
@@ -472,6 +477,20 @@ document.getElementById("unlockBtn").onclick = async () => {
   }
 };
 
+function startGame(){
+  const el = document.documentElement;
+
+  if (el.requestFullscreen) {
+    el.requestFullscreen();
+  } else if (el.webkitRequestFullscreen) {
+    el.webkitRequestFullscreen();
+  }
+
+  show("game");
+}
+
+
+  
 /* EINDSCHERM FUNCTIE */
 function showEndScreen(players){
   show("end");
