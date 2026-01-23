@@ -163,6 +163,27 @@ button,input{padding:8px;margin:4px}
   padding-bottom: 80px;
 }
 
+/* Mobiele layout */
+@media (max-width: 600px) {
+
+  #board {
+    width: 100vw;
+    grid-template-columns: repeat(10, 1fr);
+    gap: 1px;
+  }
+
+  .cell {
+    width: auto;
+    aspect-ratio: 1 / 1; /* altijd vierkant */
+  }
+
+  #boardWrapper {
+    width: 100vw;
+    overflow: hidden;
+  }
+
+}
+
   
 </style>
 </head>
