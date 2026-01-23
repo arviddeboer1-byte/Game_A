@@ -477,6 +477,7 @@ document.getElementById("unlockBtn").onclick = async () => {
   }
 };
 
+
 function startGame(){
   const el = document.documentElement;
 
@@ -486,6 +487,7 @@ function startGame(){
     el.webkitRequestFullscreen();
   }
 
+  document.querySelector('button[onclick="startGame()"]').style.display = "none";
   show("game");
 }
 
