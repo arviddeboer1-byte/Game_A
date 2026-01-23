@@ -13,6 +13,11 @@
 
 <style>
 
+*, *::before, *::after {
+  box-sizing: border-box;
+}
+
+  
 html, body {
   width: 100%;
   margin: 0;
@@ -198,11 +203,14 @@ button,input{padding:8px;margin:4px}
     overflow: hidden;
   }
 
-  #board {
-    width: 100vw;
-    grid-template-columns: repeat(10, 1fr);
-    gap: 1px;
-  }
+#board {
+  width: 100%;
+  max-width: 100%;
+  grid-template-columns: repeat(10, 1fr);
+  gap: 1px;
+  box-sizing: border-box;
+}
+
 
   .cell {
     width: 100%;
