@@ -12,6 +12,13 @@
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
 
 <style>
+
+html, body {
+  width: 100%;
+  overflow-x: hidden;
+}
+
+  
 body{margin:0;background:#1e1e1e;color:white;font-family:sans-serif}
 .screen{display:none;padding:20px}
 .active{display:block}
@@ -141,7 +148,11 @@ button,input{padding:8px;margin:4px}
 }
 
 #boardWrapper {
-  display: inline-block;
+  width: 100%;
+  max-width: 100vw;
+  overflow: hidden;
+  display: flex;
+  justify-content: center;
 }
 
 
@@ -166,22 +177,18 @@ button,input{padding:8px;margin:4px}
 }
 
 /* Mobiele layout */
+
 @media (max-width: 600px) {
 
   #board {
-    width: 100vw;
+    width: 100%;
     grid-template-columns: repeat(10, 1fr);
-    gap: 1px;
+    gap: 2px;
   }
 
   .cell {
-    width: auto;
-    aspect-ratio: 1 / 1; /* altijd vierkant */
-  }
-
-  #boardWrapper {
-    width: 100vw;
-    overflow: hidden;
+    width: 100%;
+    aspect-ratio: 1 / 1;
   }
 
 }
