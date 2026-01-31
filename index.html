@@ -409,13 +409,47 @@ async function spawnSmugglers(ref){
   }
 }
 
+async function moveSmugglers(){
+  const ref = db.collection("lobbies").doc(lobbyId);
+  const snap = await ref.collection("smugglers").get();
+
+  snap.forEach(async doc => {
+    const s = doc.data();
+    let { x, y } = s;
+
+    // 4 richtingen
+    const dirs = [
+      {dx: 0, dy: -1}, // noord
+      {dx: 0, dy: 1},  // zuid
+      {dx: -1, dy: 0}, // west
+      {dx: 1, dy: 0}   // oost
+    ];
+
+    const d = dirs[Math.floor(Math.random() * 4)];
+    const nx = x + d.dx;
+    const ny = y + d.dy;
+
+    // binnen bord blijven
+    if(nx < 0 || nx > 9 || ny < 0 || ny > 9) return;
+
+    // oude verwijderen, nieuwe zetten
+    await ref.collection("smugglers").doc(`${x}_${y}`).delete();
+    await ref.collection("smugglers").doc(`${nx}_${ny}`).set({x: nx, y: ny});
+  });
+}
+
+  
 function listenLobby(){
   show("game");
   const ref=db.collection("lobbies").doc(lobbyId);
   ref.collection("players").onSnapshot(render);
   ref.collection("smugglers").onSnapshot(render);
+
+setInterval(moveSmugglers, 10000);
+
 }
 
+  
 async function render(){
   const ref=db.collection("lobbies").doc(lobbyId);
   const ps=(await ref.collection("players").get()).docs.map(d=>d.data());
