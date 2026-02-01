@@ -357,7 +357,19 @@ const piCodes = [
   "462","643","383"
 ];
 
+let romanHour = 1;
+
+  
 let movingSmugglers = false;
+
+function toRoman(num){
+  const romans = [
+    "", "I","II","III","IV","V","VI","VII","VIII","IX",
+    "X","XI","XII","XIII","XIV","XV","XVI","XVII","XVIII","XIX",
+    "XX","XXI","XXII","XXIII","XXIV"
+  ];
+  return romans[num] || "I";
+}
   
 function show(id){
   document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
@@ -504,6 +516,12 @@ async function moveSmugglers(){
   }
 
   movingSmugglers = false;
+  
+// ⏱ Romeinse klok
+  romanHour++;
+  if(romanHour > 24) romanHour = 1;
+  document.getElementById("roman").innerText = toRoman(romanHour);
+  
 }
 
   
