@@ -117,11 +117,16 @@ button,input{padding:8px;margin:4px}
   transition: transform 0.2s;
 }
 
+
+
 .bonusRoller:focus {
   outline: none;
   transform: scale(1.1);
 }
 
+
+
+  
 #vaultCounter {
   margin-left: 10px;
   font-size: 18px;
@@ -154,6 +159,22 @@ button,input{padding:8px;margin:4px}
   color: #f33;
   animation: shake 0.4s;
 }
+
+
+#miniRow {
+  display: flex;
+  align-items: center;
+  gap: 20px;
+}
+
+#roman {
+  font-size: 48px;
+  font-weight: bold;
+  color: gold;
+  text-shadow: 0 0 10px rgba(255,215,0,0.6);
+  user-select: none;
+}
+
 
 @keyframes pop {
   0% { transform: scale(0.8); }
@@ -288,10 +309,14 @@ button,input{padding:8px;margin:4px}
 </div>
 
 
-  <h3>Mini-raster</h3>
+<h3>Mini-raster</h3>
+<div id="miniRow">
   <div id="mini"></div>
+  <div id="roman">XXIV</div>
+</div>
 
-  <h3>Bonus-pincode</h3>
+
+<h3>Bonus-pincode</h3>
 <div id="bonusContainer">
   <input type="number" class="bonusRoller" id="roll1" min="0" max="9" value="0">
   <input type="number" class="bonusRoller" id="roll2" min="0" max="9" value="0">
