@@ -416,6 +416,12 @@ async function moveSmugglers(){
 
   const ref = db.collection("lobbies").doc(lobbyId);
   const snap = await ref.collection("smugglers").get();
+  const all = snap.docs.map(d => d.data());
+
+  // Huidige bezette posities
+  const occupied = new Set(
+    all.map(s => `${s.x}_${s.y}`)
+  );
 
   for(const doc of snap.docs){
     const s = doc.data();
@@ -428,14 +434,34 @@ async function moveSmugglers(){
       {dx: 1, dy: 0}
     ];
 
-    const d = dirs[Math.floor(Math.random() * 4)];
-    const nx = x + d.dx;
-    const ny = y + d.dy;
+    // shuffle richtingen
+    dirs.sort(() => Math.random() - 0.5);
 
-    if(nx < 0 || nx > 9 || ny < 0 || ny > 9) continue;
+    let moved = false;
 
-    await ref.collection("smugglers").doc(`${x}_${y}`).delete();
-    await ref.collection("smugglers").doc(`${nx}_${ny}`).set({x: nx, y: ny});
+    for(const d of dirs){
+      const nx = x + d.dx;
+      const ny = y + d.dy;
+      const key = `${nx}_${ny}`;
+
+      // binnen bord & niet bezet
+      if(
+        nx >= 0 && nx <= 9 &&
+        ny >= 0 && ny <= 9 &&
+        !occupied.has(key)
+      ){
+        // update sets
+        occupied.delete(`${x}_${y}`);
+        occupied.add(key);
+
+        await ref.collection("smugglers").doc(`${x}_${y}`).delete();
+        await ref.collection("smugglers").doc(key).set({x: nx, y: ny});
+        moved = true;
+        break;
+      }
+    }
+
+    // geen geldige zet → blijft staan
   }
 
   movingSmugglers = false;
