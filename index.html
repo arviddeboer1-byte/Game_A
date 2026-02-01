@@ -24,6 +24,12 @@ html, body {
   padding: 0;
   overflow-x: hidden;
 }
+
+body.fullscreen {
+  height: 100vh;
+  overflow: hidden;
+}
+
   
 body{margin:0;background:#1e1e1e;color:white;font-family:sans-serif}
 
@@ -196,7 +202,7 @@ button,input{padding:8px;margin:4px}
 
 @media (max-width: 600px) {
 
-  #boardWrapper {
+#boardWrapper {
     width: 100vw;
     margin: 0;
     padding: 0;
@@ -212,7 +218,15 @@ button,input{padding:8px;margin:4px}
   background: #1e1e1e;
 }
 
+#gameButtons button {
+    padding: 6px 10px;
+    font-size: 12px;
+  }
 
+#gameButtons {
+    bottom: 4px;
+    }
+  
 .cell {
   box-shadow: inset 0 0 0 0.5px rgba(0,0,0,0.4);
 }
@@ -613,10 +627,16 @@ function startGame(){
     el.webkitRequestFullscreen();
   }
 
+  document.body.classList.add("fullscreen");
   document.querySelector('button[onclick="startGame()"]').style.display = "none";
   show("game");
 }
 
+document.addEventListener("fullscreenchange", () => {
+  if(!document.fullscreenElement){
+    document.body.classList.remove("fullscreen");
+  }
+});
 
   
 /* EINDSCHERM FUNCTIE */
