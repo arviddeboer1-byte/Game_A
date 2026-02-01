@@ -318,6 +318,8 @@ const piCodes = [
   "462","643","383"
 ];
 
+let movingSmugglers = false;
+  
 function show(id){
   document.querySelectorAll(".screen").forEach(s=>s.classList.remove("active"));
   document.getElementById(id).classList.add("active");
@@ -410,32 +412,33 @@ async function spawnSmugglers(ref){
 }
 
 async function moveSmugglers(){
+  movingSmugglers = true;
+
   const ref = db.collection("lobbies").doc(lobbyId);
   const snap = await ref.collection("smugglers").get();
 
-  snap.forEach(async doc => {
+  for(const doc of snap.docs){
     const s = doc.data();
     let { x, y } = s;
 
-    // 4 richtingen
     const dirs = [
-      {dx: 0, dy: -1}, // noord
-      {dx: 0, dy: 1},  // zuid
-      {dx: -1, dy: 0}, // west
-      {dx: 1, dy: 0}   // oost
+      {dx: 0, dy: -1},
+      {dx: 0, dy: 1},
+      {dx: -1, dy: 0},
+      {dx: 1, dy: 0}
     ];
 
     const d = dirs[Math.floor(Math.random() * 4)];
     const nx = x + d.dx;
     const ny = y + d.dy;
 
-    // binnen bord blijven
-    if(nx < 0 || nx > 9 || ny < 0 || ny > 9) return;
+    if(nx < 0 || nx > 9 || ny < 0 || ny > 9) continue;
 
-    // oude verwijderen, nieuwe zetten
     await ref.collection("smugglers").doc(`${x}_${y}`).delete();
     await ref.collection("smugglers").doc(`${nx}_${ny}`).set({x: nx, y: ny});
-  });
+  }
+
+  movingSmugglers = false;
 }
 
   
@@ -472,9 +475,10 @@ async function render(){
       "🔒 " + (me.vaults || 0);
   }
 
-  if(sm.length === 0){
-    showEndScreen(ps);
-  }
+  if(sm.length === 0 && !movingSmugglers){
+  showEndScreen(ps);
+}
+
 }
 
 /* MINI RASTER */
